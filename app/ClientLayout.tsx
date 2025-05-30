@@ -1,10 +1,7 @@
 "use client"
 import type React from "react"
-import { Inter } from "next/font/google"
 import { useState, useEffect } from "react"
 import "./globals.css"
-
-const inter = Inter({ subsets: ["latin"] })
 
 export default function ClientLayout({
   children,
@@ -30,7 +27,15 @@ export default function ClientLayout({
 
   return (
     <html lang="en">
-      <body className={inter.className}>
+      <head>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link 
+          href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" 
+          rel="stylesheet" 
+        />
+      </head>
+      <body className="font-sans">
         <nav className="fixed top-0 left-0 right-0 z-50 bg-white/95 backdrop-blur-sm border-b">
           <div className="container mx-auto px-6 py-3">
             <div className="flex items-center justify-between">
