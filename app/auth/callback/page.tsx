@@ -15,56 +15,109 @@ export default function AuthCallback() {
   useEffect(() => {
     const handleAuthCallback = async () => {
       try {
-        // Get the current URL hash parameters
+        console.log("AuthCallback: Starting auth callback process...")
+        console.log("AuthCallback: Current URL:", window.location.href)
+
+        // Check for error parameters first
+        const urlParams = new URLSearchParams(window.location.search)
+        const error = urlParams.get("error")
+        const errorDescription = urlParams.get("error_description")
+
+        if (error) {
+          console.error("AuthCallback: URL contains error:", error, errorDescription)
+          setStatus("error")
+          setMessage(errorDescription || error)
+          return
+        }
+
+        // Check for hash parameters (OAuth flow)
         const hashParams = new URLSearchParams(window.location.hash.substring(1))
         const accessToken = hashParams.get("access_token")
         const refreshToken = hashParams.get("refresh_token")
         const type = hashParams.get("type")
 
+        console.log("AuthCallback: Hash params:", {
+          hasAccessToken: !!accessToken,
+          hasRefreshToken: !!refreshToken,
+          type,
+        })
+
         if (accessToken && refreshToken) {
-          // Set the session from the tokens
-          const { data, error } = await supabase.auth.setSession({
+          console.log("AuthCallback: Setting session from tokens...")
+
+          const { data, error: sessionError } = await supabase.auth.setSession({
             access_token: accessToken,
             refresh_token: refreshToken,
           })
 
-          if (error) {
-            console.error("Session error:", error)
+          if (sessionError) {
+            console.error("AuthCallback: Session error:", sessionError)
             setStatus("error")
             setMessage("Failed to establish session. Please try signing in again.")
             return
           }
 
           if (data.user) {
-            // Determine login method and log access
+            console.log("AuthCallback: Session established for user:", data.user.email)
+
+            // Log access
             const loginMethod = type === "signup" ? "email" : "google"
             await logAccess(data.user.id, loginMethod)
 
             setStatus("success")
-            setMessage(
-              type === "signup"
-                ? "Email verified successfully! You can now access the Crown Royal Strategic Report."
-                : "Authentication successful! Redirecting to the report...",
-            )
+            setMessage("Authentication successful! Redirecting...")
 
-            // Redirect after success
+            // Redirect after a short delay
             setTimeout(() => router.push("/"), 2000)
-          }
-        } else {
-          // Check if we already have a session
-          const { data: sessionData } = await supabase.auth.getSession()
-
-          if (sessionData.session?.user) {
-            setStatus("success")
-            setMessage("Authentication successful! Redirecting to the report...")
-            setTimeout(() => router.push("/"), 2000)
-          } else {
-            setStatus("error")
-            setMessage("No authentication session found. Please try signing in again.")
+            return
           }
         }
+
+        // Check for code parameter (PKCE flow)
+        const code = urlParams.get("code")
+
+        if (code) {
+          console.log("AuthCallback: Exchanging code for session...")
+
+          const { data, error: exchangeError } = await supabase.auth.exchangeCodeForSession(code)
+
+          if (exchangeError) {
+            console.error("AuthCallback: Code exchange error:", exchangeError)
+            setStatus("error")
+            setMessage("Failed to verify email. Please try again.")
+            return
+          }
+
+          if (data.session && data.user) {
+            console.log("AuthCallback: Code exchange successful for user:", data.user.email)
+
+            // Log access
+            await logAccess(data.user.id, "email")
+
+            setStatus("success")
+            setMessage("Email verified successfully! Redirecting...")
+
+            // Redirect after a short delay
+            setTimeout(() => router.push("/"), 2000)
+            return
+          }
+        }
+
+        // Check if we already have a session
+        const { data: sessionData } = await supabase.auth.getSession()
+
+        if (sessionData.session?.user) {
+          console.log("AuthCallback: Existing session found")
+          setStatus("success")
+          setMessage("Already authenticated! Redirecting...")
+          setTimeout(() => router.push("/"), 1000)
+        } else {
+          console.log("AuthCallback: No authentication data found")
+          setStatus("error")
+          setMessage("No authentication data found. Please try signing in again.")
+        }
       } catch (err) {
-        console.error("Unexpected error:", err)
+        console.error("AuthCallback: Unexpected error:", err)
         setStatus("error")
         setMessage("An unexpected error occurred. Please try signing in again.")
       }

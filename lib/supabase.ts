@@ -1,16 +1,32 @@
-import { createClient } from "@supabase/supabase-js"
+import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"
+import { createServerComponentClient } from "@supabase/auth-helpers-nextjs"
+import { cookies } from "next/headers"
+import type { Database } from "@/types/database"
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+// Create a single instance to avoid multiple clients warning
+let supabaseClient: ReturnType<typeof createClientComponentClient<Database>> | null = null
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey)
+export function createClient() {
+  if (!supabaseClient) {
+    supabaseClient = createClientComponentClient<Database>()
+  }
+  return supabaseClient
+}
 
-// Types for our database
+// Export the singleton instance
+export const supabase = createClient()
+
+export const createServerClient = () => {
+  const cookieStore = cookies()
+  return createServerComponentClient<Database>({ cookies: () => cookieStore })
+}
+
+// Types for our database tables
 export interface Profile {
   id: string
-  email: string
-  full_name?: string
-  avatar_url?: string
+  email: string | null
+  full_name: string | null
+  avatar_url: string | null
   created_at: string
   updated_at: string
 }
@@ -18,8 +34,8 @@ export interface Profile {
 export interface AccessLog {
   id: string
   user_id: string
-  login_method: "email" | "google"
-  ip_address?: string
-  user_agent?: string
   accessed_at: string
+  ip_address: string | null
+  login_method: string | null
+  user_agent: string | null
 }

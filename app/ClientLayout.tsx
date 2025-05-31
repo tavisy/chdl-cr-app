@@ -17,7 +17,19 @@ export default function ClientLayout({
 
   // Check if we're on the login page
   useEffect(() => {
-    setIsLoginPage(window.location.pathname === "/login")
+    const checkPath = () => {
+      if (typeof window !== "undefined") {
+        setIsLoginPage(window.location.pathname === "/login")
+      }
+    }
+
+    checkPath()
+
+    // Listen for route changes
+    const handleRouteChange = () => checkPath()
+    window.addEventListener("popstate", handleRouteChange)
+
+    return () => window.removeEventListener("popstate", handleRouteChange)
   }, [])
 
   // Close mobile menu when clicking outside
@@ -51,7 +63,10 @@ export default function ClientLayout({
 
               {/* Mobile menu button */}
               <button
-                onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setMobileMenuOpen(!mobileMenuOpen)
+                }}
                 className="md:hidden flex flex-col gap-1 p-2"
                 aria-label="Toggle menu"
               >
@@ -128,6 +143,8 @@ export default function ClientLayout({
             </div>
           </div>
         </nav>
+
+        {/* Conditional rendering based on page */}
         {isLoginPage ? (
           <main className="pt-16">{children}</main>
         ) : (
@@ -135,6 +152,7 @@ export default function ClientLayout({
             <main className="pt-16">{children}</main>
           </AuthGuard>
         )}
+
         <footer className="bg-slate-900 text-white py-12">
           <div className="container mx-auto px-6">
             <div className="max-w-4xl mx-auto text-center">
