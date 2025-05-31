@@ -1,6 +1,4 @@
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"
-import { createServerComponentClient } from "@supabase/auth-helpers-nextjs"
-import { cookies } from "next/headers"
 import type { Database } from "@/types/database"
 
 // Create a single instance to avoid multiple clients warning
@@ -15,11 +13,6 @@ export function createClient() {
 
 // Export the singleton instance
 export const supabase = createClient()
-
-export const createServerClient = () => {
-  const cookieStore = cookies()
-  return createServerComponentClient<Database>({ cookies: () => cookieStore })
-}
 
 // Types for our database tables
 export interface Profile {
