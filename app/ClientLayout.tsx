@@ -77,6 +77,7 @@ export default function ClientLayout({ children }: ClientLayoutProps): JSX.Eleme
   const router = useRouter()
   const pathname = usePathname()
   const authCheckRef = useRef<boolean>(false)
+  const loadingTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
   // Pages that don't require authentication
   const publicPages: string[] = ["/login", "/auth/callback", "/auth/verify"]
@@ -97,16 +98,31 @@ export default function ClientLayout({ children }: ClientLayoutProps): JSX.Eleme
     })
     
     return hasAccess
-  }, [user?.id, user?.email_confirmed_at, user?.app_metadata?.provider]) // Only depend on relevant user properties
+  }, [user?.id, user?.email_confirmed_at, user?.app_metadata?.provider])
+
+  // Reset loading state on pathname change for authenticated users
+  useEffect(() => {
+    if (!isPublicPage && user && userHasAccess) {
+      console.log("ClientLayout: Page navigation detected, ensuring loading is false")
+      setLoading(false)
+    }
+  }, [pathname, user, userHasAccess, isPublicPage])
 
   // Initial authentication check
   useEffect(() => {
-    if (authCheckRef.current) return
-    authCheckRef.current = true
-
     const checkAuth = async (): Promise<void> => {
       try {
         console.log("ClientLayout: Initial auth check...")
+
+        // Set a fallback timeout to prevent infinite loading
+        if (loadingTimeoutRef.current) {
+          clearTimeout(loadingTimeoutRef.current)
+        }
+        
+        loadingTimeoutRef.current = setTimeout(() => {
+          console.log("ClientLayout: Auth check timeout, forcing loading to false")
+          setLoading(false)
+        }, 5000) // 5 second timeout
 
         // Use the optimized getCurrentUser function to get fresh user data
         const currentUser = await getCurrentUser()
@@ -127,12 +143,32 @@ export default function ClientLayout({ children }: ClientLayoutProps): JSX.Eleme
         console.error("ClientLayout: Auth check error:", err)
         setUser(null)
       } finally {
+        // Clear timeout and set loading to false
+        if (loadingTimeoutRef.current) {
+          clearTimeout(loadingTimeoutRef.current)
+          loadingTimeoutRef.current = null
+        }
+        console.log("ClientLayout: Setting loading to false")
         setLoading(false)
       }
     }
 
-    checkAuth()
-  }, [])
+    // Only run auth check once per mount, not on every navigation
+    if (!authCheckRef.current) {
+      authCheckRef.current = true
+      checkAuth()
+    } else {
+      // If auth check already ran, just ensure loading is false
+      setLoading(false)
+    }
+
+    // Cleanup timeout on unmount
+    return () => {
+      if (loadingTimeoutRef.current) {
+        clearTimeout(loadingTimeoutRef.current)
+      }
+    }
+  }, []) // Empty dependency array - only run once
 
   // Handle redirects after auth state is determined - with debouncing
   useEffect(() => {
@@ -156,9 +192,9 @@ export default function ClientLayout({ children }: ClientLayoutProps): JSX.Eleme
     }, 100)
 
     return () => clearTimeout(redirectTimer)
-  }, [user?.id, loading, isPublicPage, pathname, router]) // Only depend on user.id, not entire user object
+  }, [user?.id, loading, isPublicPage, pathname, router])
 
-  // Auth state change listener with cleanup
+  // Auth state change listener with cleanup - simplified
   useEffect(() => {
     const {
       data: { subscription },
@@ -169,8 +205,14 @@ export default function ClientLayout({ children }: ClientLayoutProps): JSX.Eleme
         // Get fresh user data to ensure we have the latest verification status
         const currentUser = await getCurrentUser()
         setUser(currentUser)
+        
+        // Ensure loading is false after getting user data
+        if (currentUser) {
+          setLoading(false)
+        }
       } else if (event === "SIGNED_OUT") {
         setUser(null)
+        setLoading(false)
       }
     })
 
@@ -231,11 +273,20 @@ export default function ClientLayout({ children }: ClientLayoutProps): JSX.Eleme
     setMobileMenuOpen(!mobileMenuOpen)
   }
 
-  // Loading state for protected pages
+  // Loading state for protected pages - with additional logging
   if (loading && !isPublicPage) {
+    console.log("ClientLayout: Showing loading spinner for protected page")
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100">
-        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-purple-600"></div>
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-purple-600 mx-auto"></div>
+          <p className="mt-4 text-slate-600">Loading...</p>
+          {process.env.NODE_ENV === "development" && (
+            <div className="mt-2 text-xs text-slate-500">
+              Debug: loading={loading.toString()}, user={user ? 'present' : 'null'}, isPublicPage={isPublicPage.toString()}
+            </div>
+          )}
+        </div>
       </div>
     )
   }
@@ -247,11 +298,13 @@ export default function ClientLayout({ children }: ClientLayoutProps): JSX.Eleme
 
   // Prevent flash of protected content for unauthenticated users
   if (!user) {
+    console.log("ClientLayout: No user, showing nothing")
     return null
   }
 
   // Email verification screen for users who need verification
   if (!userHasAccess) {
+    console.log("ClientLayout: User needs verification, showing verification screen")
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100 p-4">
         <Card className="w-full max-w-md">
@@ -318,6 +371,8 @@ export default function ClientLayout({ children }: ClientLayoutProps): JSX.Eleme
                 <br />
                 Has Access: {userHasAccess ? "Yes" : "No"}
                 <br />
+                Loading: {loading ? "Yes" : "No"}
+                <br />
                 Timestamp: {new Date().toISOString()}
               </div>
             )}
@@ -335,6 +390,8 @@ export default function ClientLayout({ children }: ClientLayoutProps): JSX.Eleme
     { href: "/consumer-insights", label: "Consumer Insights" },
     { href: "/recommendations", label: "Recommendations" },
   ]
+
+  console.log("ClientLayout: Rendering main layout for verified user")
 
   // Main authenticated layout
   return (
