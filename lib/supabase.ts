@@ -1,16 +1,20 @@
-import { createClient } from "@supabase/supabase-js"
+import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"
+import { createServerComponentClient } from "@supabase/auth-helpers-nextjs"
+import { cookies } from "next/headers"
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+export const createClient = () => createClientComponentClient()
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey)
+export const createServerClient = () => {
+  const cookieStore = cookies()
+  return createServerComponentClient({ cookies: () => cookieStore })
+}
 
-// Types for our database
+// Types for our database tables
 export interface Profile {
   id: string
-  email: string
-  full_name?: string
-  avatar_url?: string
+  email: string | null
+  full_name: string | null
+  avatar_url: string | null
   created_at: string
   updated_at: string
 }
@@ -18,8 +22,8 @@ export interface Profile {
 export interface AccessLog {
   id: string
   user_id: string
-  login_method: "email" | "google"
-  ip_address?: string
-  user_agent?: string
   accessed_at: string
+  ip_address: string | null
+  login_method: string | null
+  user_agent: string | null
 }
