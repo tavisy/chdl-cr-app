@@ -1,170 +1,226 @@
 "use client"
+import { useEffect, useState } from "react"
 import type React from "react"
-import { Inter } from "next/font/google"
-import { useState, useEffect } from "react"
-import "./globals.css"
-import AuthGuard from "@/components/AuthGuard"
 
-const inter = Inter({ subsets: ["latin"] })
+import { useRouter, usePathname } from "next/navigation"
+import { supabase } from "@/lib/supabase"
+import type { User } from "@supabase/supabase-js"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Mail, AlertCircle } from "lucide-react"
+import { resendConfirmation } from "@/lib/auth"
 
-export default function ClientLayout({
-  children,
-}: {
+interface ClientLayoutProps {
   children: React.ReactNode
-}) {
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
-  const [isLoginPage, setIsLoginPage] = useState(false)
+}
 
-  // Check if we're on the login page
+export default function ClientLayout({ children }: ClientLayoutProps) {
+  const [user, setUser] = useState<User | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [resendLoading, setResendLoading] = useState(false)
+  const [resendMessage, setResendMessage] = useState("")
+  const [resendError, setResendError] = useState("")
+  const router = useRouter()
+  const pathname = usePathname()
+
+  // Pages that don't require authentication
+  const publicPages = ["/login", "/auth/callback", "/auth/verify"]
+  const isPublicPage = publicPages.includes(pathname)
+
   useEffect(() => {
-    const checkPath = () => {
-      if (typeof window !== "undefined") {
-        setIsLoginPage(window.location.pathname === "/login")
+    let mounted = true
+
+    const checkAuth = async () => {
+      try {
+        console.log("ClientLayout: Checking authentication...")
+
+        const {
+          data: { session },
+          error,
+        } = await supabase.auth.getSession()
+
+        if (!mounted) return
+
+        console.log("ClientLayout: Session check:", {
+          hasSession: !!session,
+          userEmail: session?.user?.email,
+          emailConfirmed: session?.user?.email_confirmed_at,
+          currentPath: pathname,
+          isPublicPage,
+        })
+
+        if (error) {
+          console.log("ClientLayout: Session error:", error.message)
+          setUser(null)
+          setLoading(false)
+
+          if (!isPublicPage) {
+            router.push("/login")
+          }
+          return
+        }
+
+        const currentUser = session?.user || null
+        setUser(currentUser)
+        setLoading(false)
+
+        // Handle routing based on auth state
+        if (!currentUser && !isPublicPage) {
+          console.log("ClientLayout: No user, redirecting to login")
+          router.push("/login")
+        } else if (currentUser && currentUser.email_confirmed_at && pathname === "/login") {
+          console.log("ClientLayout: Verified user on login page, redirecting to home")
+          router.push("/")
+        }
+      } catch (err) {
+        console.error("ClientLayout: Auth check error:", err)
+        if (mounted) {
+          setUser(null)
+          setLoading(false)
+          if (!isPublicPage) {
+            router.push("/login")
+          }
+        }
       }
     }
 
-    checkPath()
+    checkAuth()
 
-    // Listen for route changes
-    const handleRouteChange = () => checkPath()
-    window.addEventListener("popstate", handleRouteChange)
+    // Listen for auth state changes
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (!mounted) return
 
-    return () => window.removeEventListener("popstate", handleRouteChange)
-  }, [])
+      console.log("ClientLayout: Auth state change:", {
+        event,
+        hasSession: !!session,
+        userEmail: session?.user?.email,
+        emailConfirmed: session?.user?.email_confirmed_at,
+      })
 
-  // Close mobile menu when clicking outside
-  useEffect(() => {
-    const handleClickOutside = () => {
-      setMobileMenuOpen(false)
-    }
+      const currentUser = session?.user || null
+      setUser(currentUser)
+      setLoading(false)
 
-    if (mobileMenuOpen) {
-      document.addEventListener("click", handleClickOutside)
-    }
+      // Handle auth state changes
+      if (event === "SIGNED_OUT" || !currentUser) {
+        if (!isPublicPage) {
+          router.push("/login")
+        }
+      } else if (event === "SIGNED_IN" && currentUser?.email_confirmed_at) {
+        if (pathname === "/login") {
+          router.push("/")
+        }
+      }
+    })
 
     return () => {
-      document.removeEventListener("click", handleClickOutside)
+      mounted = false
+      subscription.unsubscribe()
     }
-  }, [mobileMenuOpen])
+  }, [router, pathname, isPublicPage])
 
-  return (
-    <html lang="en">
-      <body className={inter.className}>
-        <nav className="fixed top-0 left-0 right-0 z-50 bg-white/95 backdrop-blur-sm border-b">
-          <div className="container mx-auto px-6 py-3">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <img
-                  src="/chdlscriptlogoxBigNERD-horizontal-blacktext.png"
-                  alt="Carter Hales x BIGNERD"
-                  className="h-6 md:h-8 w-auto"
-                />
-              </div>
+  const handleResendConfirmation = async () => {
+    if (!user?.email) return
 
-              {/* Mobile menu button */}
-              <button
-                onClick={(e) => {
-                  e.stopPropagation()
-                  setMobileMenuOpen(!mobileMenuOpen)
-                }}
-                className="md:hidden flex flex-col gap-1 p-2"
-                aria-label="Toggle menu"
-              >
-                <span
-                  className={`w-6 h-0.5 bg-slate-900 transition-all ${mobileMenuOpen ? "rotate-45 translate-y-2" : ""}`}
-                ></span>
-                <span className={`w-6 h-0.5 bg-slate-900 transition-all ${mobileMenuOpen ? "opacity-0" : ""}`}></span>
-                <span
-                  className={`w-6 h-0.5 bg-slate-900 transition-all ${mobileMenuOpen ? "-rotate-45 -translate-y-2" : ""}`}
-                ></span>
-              </button>
+    setResendLoading(true)
+    setResendError("")
+    setResendMessage("")
 
-              {/* Desktop navigation */}
-              <div className="hidden md:flex items-center gap-6 text-sm">
-                <a href="/" className="text-slate-600 hover:text-slate-900 transition-colors">
-                  Overview
-                </a>
-                <a href="/market-disruption" className="text-slate-600 hover:text-slate-900 transition-colors">
-                  Market Disruption
-                </a>
-                <a href="/competitive-analysis" className="text-slate-600 hover:text-slate-900 transition-colors">
-                  Competitive Analysis
-                </a>
-                <a href="/consumer-insights" className="text-slate-600 hover:text-slate-900 transition-colors">
-                  Consumer Insights
-                </a>
-                <a href="/recommendations" className="text-slate-600 hover:text-slate-900 transition-colors">
-                  Recommendations
-                </a>
-              </div>
-            </div>
+    const { error } = await resendConfirmation(user.email)
 
-            {/* Mobile navigation menu */}
-            <div
-              className={`md:hidden transition-all duration-300 ease-in-out ${mobileMenuOpen ? "max-h-96 opacity-100" : "max-h-0 opacity-0"} overflow-hidden`}
-            >
-              <div className="py-4 space-y-3 border-t border-slate-200 mt-3">
-                <a
-                  href="/"
-                  className="block text-slate-600 hover:text-slate-900 transition-colors py-2"
-                  onClick={() => setMobileMenuOpen(false)}
-                >
-                  Overview
-                </a>
-                <a
-                  href="/market-disruption"
-                  className="block text-slate-600 hover:text-slate-900 transition-colors py-2"
-                  onClick={() => setMobileMenuOpen(false)}
-                >
-                  Market Disruption
-                </a>
-                <a
-                  href="/competitive-analysis"
-                  className="block text-slate-600 hover:text-slate-900 transition-colors py-2"
-                  onClick={() => setMobileMenuOpen(false)}
-                >
-                  Competitive Analysis
-                </a>
-                <a
-                  href="/consumer-insights"
-                  className="block text-slate-600 hover:text-slate-900 transition-colors py-2"
-                  onClick={() => setMobileMenuOpen(false)}
-                >
-                  Consumer Insights
-                </a>
-                <a
-                  href="/recommendations"
-                  className="block text-slate-600 hover:text-slate-900 transition-colors py-2"
-                  onClick={() => setMobileMenuOpen(false)}
-                >
-                  Recommendations
-                </a>
-              </div>
-            </div>
-          </div>
-        </nav>
+    if (error) {
+      setResendError(error.message)
+    } else {
+      setResendMessage("Confirmation email sent! Please check your inbox and spam folder.")
+    }
 
-        {/* Conditional rendering based on page */}
-        {isLoginPage ? (
-          <main className="pt-16">{children}</main>
-        ) : (
-          <AuthGuard>
-            <main className="pt-16">{children}</main>
-          </AuthGuard>
-        )}
+    setResendLoading(false)
+  }
 
-        <footer className="bg-slate-900 text-white py-12">
-          <div className="container mx-auto px-6">
-            <div className="max-w-4xl mx-auto text-center">
-              <h3 className="text-2xl font-bold mb-4">Crown Royal Strategic Report</h3>
-              <p className="text-slate-300 mb-6">
-                Charting a Course for Premiumization and Bourbon Enthusiast Engagement
+  const handleSignOut = async () => {
+    console.log("ClientLayout: Manual sign out")
+    await supabase.auth.signOut()
+    router.push("/login")
+  }
+
+  // Show loading while checking auth (except on public pages)
+  if (loading && !isPublicPage) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-purple-600"></div>
+      </div>
+    )
+  }
+
+  // If on a public page, always render content
+  if (isPublicPage) {
+    return <>{children}</>
+  }
+
+  // If no user on protected page, don't render (redirect will happen)
+  if (!user) {
+    return null
+  }
+
+  // If user exists but email not confirmed, show verification screen
+  if (user && !user.email_confirmed_at) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100 p-4">
+        <Card className="w-full max-w-md">
+          <CardHeader className="text-center">
+            <img
+              src="/chdlscriptlogoxBigNERD-horizontal-blacktext.png"
+              alt="Carter Hales x BIGNERD"
+              className="h-12 w-auto mx-auto mb-4"
+            />
+            <CardTitle className="text-2xl font-bold">Email Verification Required</CardTitle>
+            <CardDescription>
+              Please verify your email address to access the Crown Royal Strategic Report
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="text-center">
+              <Mail className="h-16 w-16 text-blue-600 mx-auto mb-4" />
+              <p className="text-slate-700 mb-4">
+                We've sent a verification email to <strong>{user.email}</strong>
               </p>
-              <div className="text-sm text-slate-400">© 2025 BigNERD Solutions x Carter Hales Design Lab</div>
+              <p className="text-sm text-slate-600 mb-6">
+                Please check your inbox and spam folder, then click the verification link to continue.
+              </p>
             </div>
-          </div>
-        </footer>
-      </body>
-    </html>
-  )
+
+            <Button onClick={handleResendConfirmation} disabled={resendLoading} className="w-full" variant="outline">
+              <Mail className="mr-2 h-4 w-4" />
+              {resendLoading ? "Sending..." : "Resend Verification Email"}
+            </Button>
+
+            <Button onClick={handleSignOut} variant="ghost" className="w-full">
+              Sign Out & Try Different Email
+            </Button>
+
+            {resendError && (
+              <Alert variant="destructive">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>{resendError}</AlertDescription>
+              </Alert>
+            )}
+
+            {resendMessage && (
+              <Alert>
+                <Mail className="h-4 w-4" />
+                <AlertDescription>{resendMessage}</AlertDescription>
+              </Alert>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+  // User is verified, render the content
+  console.log("ClientLayout: User verified, rendering content")
+  return <>{children}</>
 }

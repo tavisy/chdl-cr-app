@@ -1,18 +1,22 @@
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"
 import type { Database } from "@/types/database"
 
-// Create a single instance to avoid multiple clients warning
-let supabaseClient: ReturnType<typeof createClientComponentClient<Database>> | null = null
-
-export function createClient() {
-  if (!supabaseClient) {
-    supabaseClient = createClientComponentClient<Database>()
-  }
-  return supabaseClient
+// Ensure we only create one instance globally
+const createSupabaseClient = () => {
+  return createClientComponentClient<Database>()
 }
 
-// Export the singleton instance
-export const supabase = createClient()
+// Use a global variable to store the client instance
+declare global {
+  var __supabase: ReturnType<typeof createSupabaseClient> | undefined
+}
+
+// Create or reuse the singleton instance
+export const supabase = globalThis.__supabase ?? createSupabaseClient()
+
+if (typeof window !== "undefined") {
+  globalThis.__supabase = supabase
+}
 
 // Types for our database tables
 export interface Profile {

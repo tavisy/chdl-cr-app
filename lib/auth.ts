@@ -46,6 +46,7 @@ export async function signUpWithEmail(email: string, password: string, fullName?
       hasUser: !!data.user,
       hasSession: !!data.session,
       error: error?.message,
+      emailConfirmationSent: data.user && !data.user.email_confirmed_at,
     })
 
     return { data, error }
