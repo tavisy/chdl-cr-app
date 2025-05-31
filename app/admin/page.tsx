@@ -6,14 +6,30 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Users, Activity, BarChart3, Search, Download, Calendar, Smartphone, Laptop, Info } from "lucide-react"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import {
+  Users,
+  Activity,
+  BarChart3,
+  Search,
+  Download,
+  Calendar,
+  Smartphone,
+  Laptop,
+  Info,
+  Shield,
+  AlertTriangle,
+} from "lucide-react"
 
 export default function AdminDashboard() {
+  const [user, setUser] = useState(null)
   const [users, setUsers] = useState([])
   const [accessLogs, setAccessLogs] = useState([])
   const [isLoading, setIsLoading] = useState(true)
+  const [isAuthorized, setIsAuthorized] = useState(false)
+  const [authError, setAuthError] = useState("")
   const [searchTerm, setSearchTerm] = useState("")
-  const [timeRange, setTimeRange] = useState("7d") // Default to 7 days
+  const [timeRange, setTimeRange] = useState("7d")
   const [stats, setStats] = useState({
     totalUsers: 0,
     totalLogins: 0,
@@ -26,25 +42,63 @@ export default function AdminDashboard() {
 
   useEffect(() => {
     const checkAdminAccess = async () => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser()
+      try {
+        console.log("Checking admin access...")
 
-      if (
-        !user ||
-        !(user.email?.includes("admin") || user.email?.includes("@bignerd") || user.email?.includes("@carterhales"))
-      ) {
-        // Redirect non-admin users
-        window.location.href = "/"
+        const {
+          data: { user: currentUser },
+          error: userError,
+        } = await supabase.auth.getUser()
+
+        if (userError) {
+          console.error("Error getting user:", userError)
+          setAuthError("Failed to authenticate user")
+          setIsLoading(false)
+          return
+        }
+
+        if (!currentUser) {
+          console.log("No user found, redirecting to login")
+          window.location.href = "/login"
+          return
+        }
+
+        console.log("Current user:", currentUser.email)
+        setUser(currentUser)
+
+        // Check if user is admin
+        const isAdmin =
+          currentUser.email?.includes("@carterhales") ||
+          currentUser.email?.includes("@bignerd") ||
+          currentUser.email?.includes("admin")
+
+        console.log("Is admin:", isAdmin, "Email:", currentUser.email)
+
+        if (!isAdmin) {
+          console.log("User is not admin, redirecting")
+          setAuthError("Access denied. Admin privileges required.")
+          setIsLoading(false)
+          return
+        }
+
+        setIsAuthorized(true)
+        console.log("Admin access granted, loading data...")
+
+        // Load dashboard data
+        await loadDashboardData()
+      } catch (error) {
+        console.error("Error in admin access check:", error)
+        setAuthError("An error occurred while checking permissions")
+        setIsLoading(false)
       }
     }
 
     checkAdminAccess()
   }, [])
 
-  useEffect(() => {
-    const fetchData = async () => {
-      setIsLoading(true)
+  const loadDashboardData = async () => {
+    try {
+      console.log("Loading dashboard data...")
 
       // Calculate date range based on selected time range
       const now = new Date()
@@ -65,24 +119,34 @@ export default function AdminDashboard() {
           break
       }
 
+      console.log("Fetching users...")
       // Fetch users
       const { data: usersData, error: usersError } = await supabase
         .from("profiles")
         .select("*")
         .order("created_at", { ascending: false })
 
-      if (usersError) console.error("Error fetching users:", usersError)
-      else setUsers(usersData || [])
+      if (usersError) {
+        console.error("Error fetching users:", usersError)
+      } else {
+        console.log("Users fetched:", usersData?.length || 0)
+        setUsers(usersData || [])
+      }
 
-      // Fetch access logs within time range - using accessed_at column
+      console.log("Fetching access logs...")
+      // Fetch access logs within time range
       const { data: logsData, error: logsError } = await supabase
         .from("access_logs")
         .select("*")
         .gte("accessed_at", startDate.toISOString())
         .order("accessed_at", { ascending: false })
 
-      if (logsError) console.error("Error fetching access logs:", logsError)
-      else setAccessLogs(logsData || [])
+      if (logsError) {
+        console.error("Error fetching access logs:", logsError)
+      } else {
+        console.log("Access logs fetched:", logsData?.length || 0)
+        setAccessLogs(logsData || [])
+      }
 
       // Calculate statistics
       if (usersData && logsData) {
@@ -97,12 +161,29 @@ export default function AdminDashboard() {
           googleLogins,
           emailLogins,
         })
+
+        console.log("Stats calculated:", {
+          totalUsers: usersData.length,
+          totalLogins: logsData.length,
+          uniqueVisitors,
+        })
       }
 
       setIsLoading(false)
+      console.log("Dashboard data loaded successfully")
+    } catch (error) {
+      console.error("Error loading dashboard data:", error)
+      setAuthError("Failed to load dashboard data")
+      setIsLoading(false)
     }
+  }
 
-    fetchData()
+  // Reload data when time range changes
+  useEffect(() => {
+    if (isAuthorized && !isLoading) {
+      setIsLoading(true)
+      loadDashboardData()
+    }
   }, [timeRange])
 
   // Filter users based on search term
@@ -135,26 +216,19 @@ export default function AdminDashboard() {
   const exportCSV = (data, filename) => {
     if (!data || !data.length) return
 
-    // Convert object keys to CSV header
     const headers = Object.keys(data[0])
-
-    // Convert data to CSV rows
     const csvRows = [
-      headers.join(","), // Header row
+      headers.join(","),
       ...data.map((row) =>
         headers
           .map((header) =>
-            // Handle values with commas by wrapping in quotes
             typeof row[header] === "string" && row[header].includes(",") ? `"${row[header]}"` : row[header],
           )
           .join(","),
       ),
     ]
 
-    // Create CSV content
     const csvContent = csvRows.join("\n")
-
-    // Create download link
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" })
     const url = URL.createObjectURL(blob)
     const link = document.createElement("a")
@@ -179,9 +253,66 @@ export default function AdminDashboard() {
     return user?.email || "Unknown"
   }
 
+  // Show loading state
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto mb-4"></div>
+          <p className="text-slate-600">Loading admin dashboard...</p>
+          <p className="text-sm text-slate-500 mt-2">Checking permissions and loading data</p>
+        </div>
+      </div>
+    )
+  }
+
+  // Show error state
+  if (authError || !isAuthorized) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100 p-4">
+        <Card className="w-full max-w-md">
+          <CardHeader className="text-center">
+            <Shield className="h-12 w-12 text-red-500 mx-auto mb-4" />
+            <CardTitle className="text-2xl font-bold">Access Denied</CardTitle>
+            <CardDescription>You don't have permission to access the admin dashboard</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {authError && (
+              <Alert variant="destructive">
+                <AlertTriangle className="h-4 w-4" />
+                <AlertDescription>{authError}</AlertDescription>
+              </Alert>
+            )}
+
+            <div className="text-center space-y-2">
+              <p className="text-sm text-slate-600">Current user: {user?.email || "Not logged in"}</p>
+              <p className="text-xs text-slate-500">
+                Admin access requires an email containing @carterhales, @bignerd, or admin
+              </p>
+            </div>
+
+            <div className="flex gap-2">
+              <Button onClick={() => (window.location.href = "/")} variant="outline" className="flex-1">
+                Go Home
+              </Button>
+              <Button onClick={() => (window.location.href = "/login")} className="flex-1">
+                Login
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
   return (
     <div className="container mx-auto px-4 py-8">
-      <h1 className="text-3xl font-bold mb-6">Admin Dashboard</h1>
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h1 className="text-3xl font-bold">Admin Dashboard</h1>
+          <p className="text-slate-600">Welcome, {user?.email}</p>
+        </div>
+      </div>
 
       {/* Time range selector */}
       <div className="flex flex-wrap gap-2 mb-6">
@@ -316,7 +447,7 @@ export default function AdminDashboard() {
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
               <div>
-                <CardTitle>Users</CardTitle>
+                <CardTitle>Users ({filteredUsers.length})</CardTitle>
                 <CardDescription>Manage user accounts and profiles</CardDescription>
               </div>
               <Button
@@ -330,40 +461,36 @@ export default function AdminDashboard() {
               </Button>
             </CardHeader>
             <CardContent>
-              {isLoading ? (
-                <div className="text-center py-4">Loading users...</div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full border-collapse">
-                    <thead>
-                      <tr className="border-b">
-                        <th className="text-left py-3 px-4 font-medium">Name</th>
-                        <th className="text-left py-3 px-4 font-medium">Email</th>
-                        <th className="text-left py-3 px-4 font-medium">Created</th>
-                        <th className="text-left py-3 px-4 font-medium">Last Updated</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {filteredUsers.length > 0 ? (
-                        filteredUsers.map((user) => (
-                          <tr key={user.id} className="border-b hover:bg-slate-50">
-                            <td className="py-3 px-4">{user.full_name || "N/A"}</td>
-                            <td className="py-3 px-4">{user.email}</td>
-                            <td className="py-3 px-4">{formatDate(user.created_at)}</td>
-                            <td className="py-3 px-4">{formatDate(user.updated_at)}</td>
-                          </tr>
-                        ))
-                      ) : (
-                        <tr>
-                          <td colSpan={4} className="text-center py-4">
-                            {searchTerm ? "No users match your search" : "No users found"}
-                          </td>
+              <div className="overflow-x-auto">
+                <table className="w-full border-collapse">
+                  <thead>
+                    <tr className="border-b">
+                      <th className="text-left py-3 px-4 font-medium">Name</th>
+                      <th className="text-left py-3 px-4 font-medium">Email</th>
+                      <th className="text-left py-3 px-4 font-medium">Created</th>
+                      <th className="text-left py-3 px-4 font-medium">Last Updated</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredUsers.length > 0 ? (
+                      filteredUsers.map((user) => (
+                        <tr key={user.id} className="border-b hover:bg-slate-50">
+                          <td className="py-3 px-4">{user.full_name || "N/A"}</td>
+                          <td className="py-3 px-4">{user.email}</td>
+                          <td className="py-3 px-4">{formatDate(user.created_at)}</td>
+                          <td className="py-3 px-4">{formatDate(user.updated_at)}</td>
                         </tr>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              )}
+                      ))
+                    ) : (
+                      <tr>
+                        <td colSpan={4} className="text-center py-4">
+                          {searchTerm ? "No users match your search" : "No users found"}
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>
@@ -373,7 +500,7 @@ export default function AdminDashboard() {
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
               <div>
-                <CardTitle>Activity Logs</CardTitle>
+                <CardTitle>Activity Logs ({filteredLogs.length})</CardTitle>
                 <CardDescription>User login and access history</CardDescription>
               </div>
               <Button
@@ -387,59 +514,55 @@ export default function AdminDashboard() {
               </Button>
             </CardHeader>
             <CardContent>
-              {isLoading ? (
-                <div className="text-center py-4">Loading activity logs...</div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full border-collapse">
-                    <thead>
-                      <tr className="border-b">
-                        <th className="text-left py-3 px-4 font-medium">User</th>
-                        <th className="text-left py-3 px-4 font-medium">Auth Method</th>
-                        <th className="text-left py-3 px-4 font-medium">Device</th>
-                        <th className="text-left py-3 px-4 font-medium">IP Address</th>
-                        <th className="text-left py-3 px-4 font-medium">Timestamp</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {filteredLogs.length > 0 ? (
-                        filteredLogs.map((log) => (
-                          <tr key={log.id} className="border-b hover:bg-slate-50">
-                            <td className="py-3 px-4">{getUserEmail(log.user_id)}</td>
-                            <td className="py-3 px-4">
-                              <span
-                                className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                                  log.login_method === "google"
-                                    ? "bg-blue-100 text-blue-800"
-                                    : "bg-green-100 text-green-800"
-                                }`}
-                              >
-                                {log.login_method || "Unknown"}
-                              </span>
-                            </td>
-                            <td className="py-3 px-4">
-                              <div className="flex items-center gap-1">
-                                {getDeviceType(log.user_agent) === "Mobile" && <Smartphone size={14} />}
-                                {getDeviceType(log.user_agent) === "Desktop" && <Laptop size={14} />}
-                                {getDeviceType(log.user_agent) === "Unknown" && <Info size={14} />}
-                                <span>{getDeviceType(log.user_agent)}</span>
-                              </div>
-                            </td>
-                            <td className="py-3 px-4">{log.ip_address || "N/A"}</td>
-                            <td className="py-3 px-4">{formatDate(log.accessed_at)}</td>
-                          </tr>
-                        ))
-                      ) : (
-                        <tr>
-                          <td colSpan={5} className="text-center py-4">
-                            {searchTerm ? "No logs match your search" : "No activity logs found"}
+              <div className="overflow-x-auto">
+                <table className="w-full border-collapse">
+                  <thead>
+                    <tr className="border-b">
+                      <th className="text-left py-3 px-4 font-medium">User</th>
+                      <th className="text-left py-3 px-4 font-medium">Auth Method</th>
+                      <th className="text-left py-3 px-4 font-medium">Device</th>
+                      <th className="text-left py-3 px-4 font-medium">IP Address</th>
+                      <th className="text-left py-3 px-4 font-medium">Timestamp</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredLogs.length > 0 ? (
+                      filteredLogs.map((log) => (
+                        <tr key={log.id} className="border-b hover:bg-slate-50">
+                          <td className="py-3 px-4">{getUserEmail(log.user_id)}</td>
+                          <td className="py-3 px-4">
+                            <span
+                              className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                                log.login_method === "google"
+                                  ? "bg-blue-100 text-blue-800"
+                                  : "bg-green-100 text-green-800"
+                              }`}
+                            >
+                              {log.login_method || "Unknown"}
+                            </span>
                           </td>
+                          <td className="py-3 px-4">
+                            <div className="flex items-center gap-1">
+                              {getDeviceType(log.user_agent) === "Mobile" && <Smartphone size={14} />}
+                              {getDeviceType(log.user_agent) === "Desktop" && <Laptop size={14} />}
+                              {getDeviceType(log.user_agent) === "Unknown" && <Info size={14} />}
+                              <span>{getDeviceType(log.user_agent)}</span>
+                            </div>
+                          </td>
+                          <td className="py-3 px-4">{log.ip_address || "N/A"}</td>
+                          <td className="py-3 px-4">{formatDate(log.accessed_at)}</td>
                         </tr>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              )}
+                      ))
+                    ) : (
+                      <tr>
+                        <td colSpan={5} className="text-center py-4">
+                          {searchTerm ? "No logs match your search" : "No activity logs found"}
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>
