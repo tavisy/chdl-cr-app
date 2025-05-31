@@ -1,5 +1,5 @@
 "use client"
-import { useEffect, useState } from "react"
+import { useEffect, useState, useCallback, useRef } from "react"
 import type React from "react"
 import { useRouter, usePathname } from "next/navigation"
 import { supabase } from "@/lib/supabase"
@@ -14,6 +14,51 @@ interface ClientLayoutProps {
   children: React.ReactNode
 }
 
+// Custom hook for localStorage with SSR safety
+function useLocalStorage(key: string, initialValue: boolean) {
+  const [storedValue, setStoredValue] = useState<boolean>(initialValue)
+  const [isClient, setIsClient] = useState(false)
+
+  useEffect(() => {
+    setIsClient(true)
+    try {
+      const item = window.localStorage.getItem(key)
+      if (item) {
+        setStoredValue(JSON.parse(item))
+      }
+    } catch (error) {
+      console.warn(`Error reading localStorage key "${key}":`, error)
+    }
+  }, [key])
+
+  const setValue = useCallback(
+    (value: boolean) => {
+      try {
+        setStoredValue(value)
+        if (typeof window !== "undefined") {
+          window.localStorage.setItem(key, JSON.stringify(value))
+        }
+      } catch (error) {
+        console.warn(`Error setting localStorage key "${key}":`, error)
+      }
+    },
+    [key],
+  )
+
+  const removeValue = useCallback(() => {
+    try {
+      setStoredValue(initialValue)
+      if (typeof window !== "undefined") {
+        window.localStorage.removeItem(key)
+      }
+    } catch (error) {
+      console.warn(`Error removing localStorage key "${key}":`, error)
+    }
+  }, [key, initialValue])
+
+  return [storedValue, setValue, removeValue, isClient] as const
+}
+
 export default function ClientLayout({ children }: ClientLayoutProps) {
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
@@ -21,138 +66,135 @@ export default function ClientLayout({ children }: ClientLayoutProps) {
   const [resendMessage, setResendMessage] = useState("")
   const [resendError, setResendError] = useState("")
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
-  const [bypassVerification, setBypassVerification] = useState(() => {
-    // Check if bypass is stored in localStorage
-    if (typeof window !== "undefined") {
-      return localStorage.getItem("bypassVerification") === "true"
-    }
-    return false
-  })
+
+  const [bypassVerification, setBypassVerification, removeBypassVerification, isClient] = useLocalStorage(
+    "bypassVerification",
+    false,
+  )
+
   const router = useRouter()
   const pathname = usePathname()
+  const authCheckRef = useRef(false)
 
   // Pages that don't require authentication
   const publicPages = ["/login", "/auth/callback", "/auth/verify"]
   const isPublicPage = publicPages.includes(pathname)
 
-  // Check authentication once on initial load
+  // Memoized access check function
+  const checkUserAccess = useCallback((user: User | null, bypass: boolean): boolean => {
+    if (!user) return false
+
+    // Google OAuth users are automatically verified
+    const isGoogleUser = user.app_metadata?.provider === "google"
+
+    return !!(user.email_confirmed_at || isGoogleUser || bypass)
+  }, [])
+
+  // Initial authentication check
   useEffect(() => {
+    if (authCheckRef.current) return
+    authCheckRef.current = true
+
     const checkAuth = async () => {
       try {
         console.log("ClientLayout: Initial auth check...")
 
-        // First get the current session without trying to refresh
-        const { data: sessionData } = await supabase.auth.getSession()
+        const { data: sessionData, error: sessionError } = await supabase.auth.getSession()
 
-        // If we have a session, try to refresh it to get the latest data
-        if (sessionData.session) {
-          console.log("ClientLayout: Session found, attempting refresh...")
-
-          try {
-            const { data: refreshData } = await supabase.auth.refreshSession()
-            const session = refreshData.session
-
-            if (session) {
-              console.log("ClientLayout: Session refreshed successfully, user:", {
-                email: session.user.email,
-                confirmed: !!session.user.email_confirmed_at,
-                confirmedAt: session.user.email_confirmed_at,
-                provider: session.user.app_metadata?.provider,
-                bypassActive: bypassVerification,
-              })
-
-              setUser(session.user)
-
-              // If user is confirmed via Google OAuth, automatically set bypass
-              if (session.user.app_metadata?.provider === "google" && session.user.email_confirmed_at) {
-                console.log("ClientLayout: Google user with confirmed email, setting bypass")
-                setBypassVerification(true)
-                if (typeof window !== "undefined") {
-                  localStorage.setItem("bypassVerification", "true")
-                }
-              }
-            } else {
-              // Refresh failed but we still have the original session
-              console.log("ClientLayout: Session refresh returned no session, using original")
-              setUser(sessionData.session.user)
-            }
-          } catch (refreshError) {
-            // If refresh fails, fall back to the original session
-            console.log("ClientLayout: Session refresh failed, using original session", refreshError)
-            setUser(sessionData.session.user)
-          }
-        } else {
-          // No session found
-          console.log("ClientLayout: No session found")
+        if (sessionError) {
+          console.error("ClientLayout: Session error:", sessionError)
           setUser(null)
-
-          if (!isPublicPage) {
-            router.push("/login")
-          }
+          setLoading(false)
+          return
         }
 
-        setLoading(false)
+        if (sessionData.session?.user) {
+          const currentUser = sessionData.session.user
+          console.log("ClientLayout: User found:", {
+            email: currentUser.email,
+            confirmed: !!currentUser.email_confirmed_at,
+            provider: currentUser.app_metadata?.provider,
+          })
 
-        // If on login page but already authenticated, redirect to home
-        if (pathname === "/login" && user) {
-          router.push("/")
+          setUser(currentUser)
+
+          // Auto-enable bypass for Google users with confirmed emails
+          if (currentUser.app_metadata?.provider === "google" && currentUser.email_confirmed_at) {
+            console.log("ClientLayout: Auto-enabling bypass for Google user")
+            setBypassVerification(true)
+          }
+        } else {
+          console.log("ClientLayout: No active session")
+          setUser(null)
         }
       } catch (err) {
         console.error("ClientLayout: Auth check error:", err)
         setUser(null)
+      } finally {
         setLoading(false)
-
-        if (!isPublicPage) {
-          router.push("/login")
-        }
       }
     }
 
     checkAuth()
-  }, [isPublicPage, pathname, router, bypassVerification])
+  }, [setBypassVerification])
 
-  // Listen for auth state changes
+  // Handle redirects after auth state is determined
+  useEffect(() => {
+    if (loading) return
+
+    // Redirect unauthenticated users from protected pages
+    if (!user && !isPublicPage) {
+      router.push("/login")
+      return
+    }
+
+    // Redirect authenticated users from login page
+    if (user && pathname === "/login") {
+      router.push("/")
+      return
+    }
+  }, [user, loading, isPublicPage, pathname, router])
+
+  // Auth state change listener with cleanup
   useEffect(() => {
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((event, session) => {
+    } = supabase.auth.onAuthStateChange(async (event, session) => {
       console.log("ClientLayout: Auth state change:", event)
 
       if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED") {
-        setUser(session?.user || null)
+        const currentUser = session?.user || null
+        setUser(currentUser)
+
+        // Auto-enable bypass for Google users
+        if (currentUser?.app_metadata?.provider === "google" && currentUser.email_confirmed_at) {
+          setBypassVerification(true)
+        }
       } else if (event === "SIGNED_OUT") {
         setUser(null)
-        // Clear bypass on sign out
-        setBypassVerification(false)
-        if (typeof window !== "undefined") {
-          localStorage.removeItem("bypassVerification")
-        }
-        if (!isPublicPage) {
-          router.push("/login")
-        }
+        removeBypassVerification()
       }
     })
 
-    return () => {
-      subscription.unsubscribe()
-    }
-  }, [isPublicPage, router])
+    return () => subscription.unsubscribe()
+  }, [setBypassVerification, removeBypassVerification])
 
-  // Close mobile menu when clicking outside
+  // Mobile menu click outside handler
   useEffect(() => {
-    const handleClickOutside = () => {
-      setMobileMenuOpen(false)
+    if (!mobileMenuOpen) return
+
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as Element
+      if (!target.closest("nav")) {
+        setMobileMenuOpen(false)
+      }
     }
 
-    if (mobileMenuOpen) {
-      document.addEventListener("click", handleClickOutside)
-    }
-
-    return () => {
-      document.removeEventListener("click", handleClickOutside)
-    }
+    document.addEventListener("click", handleClickOutside)
+    return () => document.removeEventListener("click", handleClickOutside)
   }, [mobileMenuOpen])
 
+  // Event handlers
   const handleResendConfirmation = async () => {
     if (!user?.email) return
 
@@ -160,70 +202,65 @@ export default function ClientLayout({ children }: ClientLayoutProps) {
     setResendError("")
     setResendMessage("")
 
-    const { error } = await resendConfirmation(user.email)
+    try {
+      const { error } = await resendConfirmation(user.email)
 
-    if (error) {
-      setResendError(error.message)
-    } else {
-      setResendMessage("Confirmation email sent! Please check your inbox and spam folder.")
+      if (error) {
+        setResendError(error.message)
+      } else {
+        setResendMessage("Confirmation email sent! Please check your inbox and spam folder.")
+      }
+    } catch (err) {
+      setResendError("Failed to send confirmation email. Please try again.")
+    } finally {
+      setResendLoading(false)
     }
-
-    setResendLoading(false)
   }
 
   const handleSignOut = async () => {
-    console.log("Signing out user...")
-    await supabase.auth.signOut()
-    // Clear bypass on sign out
-    setBypassVerification(false)
-    if (typeof window !== "undefined") {
-      localStorage.removeItem("bypassVerification")
+    try {
+      console.log("Signing out user...")
+      await supabase.auth.signOut()
+      removeBypassVerification()
+      // Router redirect will be handled by the auth state change
+    } catch (error) {
+      console.error("Sign out error:", error)
     }
-    router.push("/login")
   }
 
   const handleBypassVerification = () => {
     console.log("Setting bypass verification to TRUE")
     setBypassVerification(true)
-    // Store bypass in localStorage to persist across page refreshes
-    if (typeof window !== "undefined") {
-      localStorage.setItem("bypassVerification", "true")
-    }
   }
 
-  // Show loading while checking auth (except on public pages)
+  const toggleMobileMenu = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    setMobileMenuOpen(!mobileMenuOpen)
+  }
+
+  // Loading state for protected pages
   if (loading && !isPublicPage) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100">
         <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-purple-600"></div>
       </div>
     )
   }
 
-  // If on a public page, always render content
+  // Render public pages without layout
   if (isPublicPage) {
     return <>{children}</>
   }
 
-  // If no user on protected page, redirect to login
+  // Prevent flash of protected content for unauthenticated users
   if (!user) {
-    router.push("/login")
     return null
   }
 
-  // Check if user should have access (either email confirmed OR bypass is enabled)
-  const isGoogleUser = user.app_metadata?.provider === "google"
-  const hasAccess = user.email_confirmed_at || bypassVerification || isGoogleUser
+  // Check access permissions
+  const hasAccess = checkUserAccess(user, bypassVerification)
 
-  console.log("Access check:", {
-    emailConfirmed: !!user.email_confirmed_at,
-    confirmedAt: user.email_confirmed_at,
-    isGoogleUser,
-    bypassActive: bypassVerification,
-    hasAccess,
-  })
-
-  // If user exists but email not confirmed and no bypass, show verification screen
+  // Email verification screen
   if (!hasAccess) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100 p-4">
@@ -277,25 +314,36 @@ export default function ClientLayout({ children }: ClientLayoutProps) {
               </Alert>
             )}
 
-            {/* Debug info */}
-            <div className="mt-4 p-3 bg-gray-100 rounded text-xs">
-              <strong>Debug:</strong> User ID: {user.id}
-              <br />
-              Email: {user.email}
-              <br />
-              Confirmed: {user.email_confirmed_at ? "Yes" : "No"}
-              <br />
-              Confirmed At: {user.email_confirmed_at || "Not confirmed"}
-              <br />
-              Bypass Active: {bypassVerification ? "Yes" : "No"}
-            </div>
+            {/* Debug info - only show in development */}
+            {process.env.NODE_ENV === "development" && (
+              <div className="mt-4 p-3 bg-gray-100 rounded text-xs">
+                <strong>Debug:</strong> User ID: {user.id}
+                <br />
+                Email: {user.email}
+                <br />
+                Confirmed: {user.email_confirmed_at ? "Yes" : "No"}
+                <br />
+                Provider: {user.app_metadata?.provider || "email"}
+                <br />
+                Bypass Active: {bypassVerification ? "Yes" : "No"}
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
     )
   }
 
-  // User has access (verified or bypassed), render the content with navigation
+  // Navigation links data
+  const navLinks = [
+    { href: "/", label: "Overview" },
+    { href: "/market-disruption", label: "Market Disruption" },
+    { href: "/competitive-analysis", label: "Competitive Analysis" },
+    { href: "/consumer-insights", label: "Consumer Insights" },
+    { href: "/recommendations", label: "Recommendations" },
+  ]
+
+  // Main authenticated layout
   return (
     <>
       <nav className="fixed top-0 left-0 right-0 z-50 bg-white/95 backdrop-blur-sm border-b">
@@ -310,52 +358,36 @@ export default function ClientLayout({ children }: ClientLayoutProps) {
             </div>
 
             {/* Mobile menu button */}
-            <button
-              onClick={(e) => {
-                e.stopPropagation()
-                setMobileMenuOpen(!mobileMenuOpen)
-              }}
-              className="md:hidden flex flex-col gap-1 p-2"
-              aria-label="Toggle menu"
-            >
+            <button onClick={toggleMobileMenu} className="md:hidden flex flex-col gap-1 p-2" aria-label="Toggle menu">
               <span
                 className={`w-6 h-0.5 bg-slate-900 transition-all ${mobileMenuOpen ? "rotate-45 translate-y-2" : ""}`}
-              ></span>
-              <span className={`w-6 h-0.5 bg-slate-900 transition-all ${mobileMenuOpen ? "opacity-0" : ""}`}></span>
+              />
+              <span className={`w-6 h-0.5 bg-slate-900 transition-all ${mobileMenuOpen ? "opacity-0" : ""}`} />
               <span
                 className={`w-6 h-0.5 bg-slate-900 transition-all ${mobileMenuOpen ? "-rotate-45 -translate-y-2" : ""}`}
-              ></span>
+              />
             </button>
 
             {/* Desktop navigation */}
             <div className="hidden md:flex items-center gap-6 text-sm">
-              <a href="/" className="text-slate-600 hover:text-slate-900 transition-colors">
-                Overview
-              </a>
-              <a href="/market-disruption" className="text-slate-600 hover:text-slate-900 transition-colors">
-                Market Disruption
-              </a>
-              <a href="/competitive-analysis" className="text-slate-600 hover:text-slate-900 transition-colors">
-                Competitive Analysis
-              </a>
-              <a href="/consumer-insights" className="text-slate-600 hover:text-slate-900 transition-colors">
-                Consumer Insights
-              </a>
-              <a href="/recommendations" className="text-slate-600 hover:text-slate-900 transition-colors">
-                Recommendations
-              </a>
+              {navLinks.map(({ href, label }) => (
+                <a key={href} href={href} className="text-slate-600 hover:text-slate-900 transition-colors">
+                  {label}
+                </a>
+              ))}
 
               {/* User info and logout button */}
               <div className="flex items-center gap-3 ml-4 pl-4 border-l border-slate-200">
                 <div className="flex items-center gap-2 text-slate-600">
                   <UserIcon className="h-4 w-4" />
-                  <span className="text-xs">{user.email}</span>
+                  <span className="text-xs truncate max-w-32">{user.email}</span>
                 </div>
                 <Button
                   onClick={handleSignOut}
                   variant="ghost"
                   size="sm"
                   className="text-slate-600 hover:text-slate-900 h-8 px-2"
+                  aria-label="Sign out"
                 >
                   <LogOut className="h-4 w-4" />
                 </Button>
@@ -365,50 +397,27 @@ export default function ClientLayout({ children }: ClientLayoutProps) {
 
           {/* Mobile navigation menu */}
           <div
-            className={`md:hidden transition-all duration-300 ease-in-out ${mobileMenuOpen ? "max-h-96 opacity-100" : "max-h-0 opacity-0"} overflow-hidden`}
+            className={`md:hidden transition-all duration-300 ease-in-out ${
+              mobileMenuOpen ? "max-h-96 opacity-100" : "max-h-0 opacity-0"
+            } overflow-hidden`}
           >
             <div className="py-4 space-y-3 border-t border-slate-200 mt-3">
-              <a
-                href="/"
-                className="block text-slate-600 hover:text-slate-900 transition-colors py-2"
-                onClick={() => setMobileMenuOpen(false)}
-              >
-                Overview
-              </a>
-              <a
-                href="/market-disruption"
-                className="block text-slate-600 hover:text-slate-900 transition-colors py-2"
-                onClick={() => setMobileMenuOpen(false)}
-              >
-                Market Disruption
-              </a>
-              <a
-                href="/competitive-analysis"
-                className="block text-slate-600 hover:text-slate-900 transition-colors py-2"
-                onClick={() => setMobileMenuOpen(false)}
-              >
-                Competitive Analysis
-              </a>
-              <a
-                href="/consumer-insights"
-                className="block text-slate-600 hover:text-slate-900 transition-colors py-2"
-                onClick={() => setMobileMenuOpen(false)}
-              >
-                Consumer Insights
-              </a>
-              <a
-                href="/recommendations"
-                className="block text-slate-600 hover:text-slate-900 transition-colors py-2"
-                onClick={() => setMobileMenuOpen(false)}
-              >
-                Recommendations
-              </a>
+              {navLinks.map(({ href, label }) => (
+                <a
+                  key={href}
+                  href={href}
+                  className="block text-slate-600 hover:text-slate-900 transition-colors py-2"
+                  onClick={() => setMobileMenuOpen(false)}
+                >
+                  {label}
+                </a>
+              ))}
 
               {/* Mobile user info and logout */}
               <div className="pt-3 border-t border-slate-200">
                 <div className="flex items-center gap-2 text-slate-600 py-2">
                   <UserIcon className="h-4 w-4" />
-                  <span className="text-xs">{user.email}</span>
+                  <span className="text-xs truncate">{user.email}</span>
                 </div>
                 <Button
                   onClick={handleSignOut}
