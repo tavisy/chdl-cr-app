@@ -67,10 +67,7 @@ export default function ClientLayout({ children }: ClientLayoutProps) {
   const [resendError, setResendError] = useState("")
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
 
-  const [bypassVerification, setBypassVerification, removeBypassVerification, isClient] = useLocalStorage(
-    "bypassVerification",
-    false,
-  )
+  const [, , , isClient] = useLocalStorage("bypassVerification", false)
 
   const router = useRouter()
   const pathname = usePathname()
@@ -81,13 +78,13 @@ export default function ClientLayout({ children }: ClientLayoutProps) {
   const isPublicPage = publicPages.includes(pathname)
 
   // Memoized access check function
-  const checkUserAccess = useCallback((user: User | null, bypass: boolean): boolean => {
+  const checkUserAccess = useCallback((user: User | null): boolean => {
     if (!user) return false
 
     // Google OAuth users are automatically verified
     const isGoogleUser = user.app_metadata?.provider === "google"
 
-    return !!(user.email_confirmed_at || isGoogleUser || bypass)
+    return !!(user.email_confirmed_at || isGoogleUser)
   }, [])
 
   // Initial authentication check
@@ -117,12 +114,6 @@ export default function ClientLayout({ children }: ClientLayoutProps) {
           })
 
           setUser(currentUser)
-
-          // Auto-enable bypass for Google users with confirmed emails
-          if (currentUser.app_metadata?.provider === "google" && currentUser.email_confirmed_at) {
-            console.log("ClientLayout: Auto-enabling bypass for Google user")
-            setBypassVerification(true)
-          }
         } else {
           console.log("ClientLayout: No active session")
           setUser(null)
@@ -136,7 +127,7 @@ export default function ClientLayout({ children }: ClientLayoutProps) {
     }
 
     checkAuth()
-  }, [setBypassVerification])
+  }, [])
 
   // Handle redirects after auth state is determined
   useEffect(() => {
@@ -165,19 +156,13 @@ export default function ClientLayout({ children }: ClientLayoutProps) {
       if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED") {
         const currentUser = session?.user || null
         setUser(currentUser)
-
-        // Auto-enable bypass for Google users
-        if (currentUser?.app_metadata?.provider === "google" && currentUser.email_confirmed_at) {
-          setBypassVerification(true)
-        }
       } else if (event === "SIGNED_OUT") {
         setUser(null)
-        removeBypassVerification()
       }
     })
 
     return () => subscription.unsubscribe()
-  }, [setBypassVerification, removeBypassVerification])
+  }, [])
 
   // Mobile menu click outside handler
   useEffect(() => {
@@ -221,16 +206,10 @@ export default function ClientLayout({ children }: ClientLayoutProps) {
     try {
       console.log("Signing out user...")
       await supabase.auth.signOut()
-      removeBypassVerification()
       // Router redirect will be handled by the auth state change
     } catch (error) {
       console.error("Sign out error:", error)
     }
-  }
-
-  const handleBypassVerification = () => {
-    console.log("Setting bypass verification to TRUE")
-    setBypassVerification(true)
   }
 
   const toggleMobileMenu = (e: React.MouseEvent) => {
@@ -258,7 +237,7 @@ export default function ClientLayout({ children }: ClientLayoutProps) {
   }
 
   // Check access permissions
-  const hasAccess = checkUserAccess(user, bypassVerification)
+  const hasAccess = checkUserAccess(user)
 
   // Email verification screen
   if (!hasAccess) {
@@ -286,10 +265,6 @@ export default function ClientLayout({ children }: ClientLayoutProps) {
                 Please check your inbox and spam folder, then click the verification link to continue.
               </p>
             </div>
-
-            <Button onClick={handleBypassVerification} className="w-full">
-              Continue to Report (Skip Verification)
-            </Button>
 
             <Button onClick={handleResendConfirmation} disabled={resendLoading} variant="outline" className="w-full">
               <Mail className="mr-2 h-4 w-4" />
@@ -325,7 +300,6 @@ export default function ClientLayout({ children }: ClientLayoutProps) {
                 <br />
                 Provider: {user.app_metadata?.provider || "email"}
                 <br />
-                Bypass Active: {bypassVerification ? "Yes" : "No"}
               </div>
             )}
           </CardContent>

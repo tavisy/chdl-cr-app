@@ -33,7 +33,7 @@ export default function AuthCallback() {
             await logAccess(sessionData.session.user.id, isGoogleUser ? "google" : "email")
 
             // Store bypass in localStorage to ensure access
-            localStorage.setItem("bypassVerification", "true")
+            // localStorage.setItem("bypassVerification", "true")
 
             setStatus("success")
             setMessage(`Successfully signed in! Redirecting...`)
@@ -103,7 +103,7 @@ export default function AuthCallback() {
               await logAccess(data.user.id, loginMethod)
 
               // Store bypass in localStorage to ensure access
-              localStorage.setItem("bypassVerification", "true")
+              // localStorage.setItem("bypassVerification", "true")
 
               setStatus("success")
               setMessage("Authentication successful! Redirecting...")
