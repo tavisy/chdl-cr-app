@@ -1,9 +1,16 @@
 "use client"
 import { useState, useEffect } from "react"
 import type React from "react"
-
 import { useRouter } from "next/navigation"
-import { signInWithEmail, signUpWithEmail, signInWithGoogle, resendConfirmation } from "@/lib/auth"
+import { 
+  signInWithEmail, 
+  signUpWithEmail, 
+  signInWithGoogle, 
+  resendConfirmation,
+  getCurrentUser,
+  hasVerifiedAccess,
+  needsEmailVerification
+} from "@/lib/auth"
 import { supabase } from "@/lib/supabase"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -12,23 +19,59 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Label } from "@/components/ui/label"
 import { Mail, CheckCircle, AlertCircle, Bug } from "lucide-react"
+import type { User } from "@supabase/supabase-js"
 
-export default function LoginPage() {
-  const [email, setEmail] = useState("")
-  const [password, setPassword] = useState("")
-  const [fullName, setFullName] = useState("")
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState("")
-  const [message, setMessage] = useState("")
-  const [showResendButton, setShowResendButton] = useState(false)
-  const [pendingEmail, setPendingEmail] = useState("")
-  const [showDebug, setShowDebug] = useState(false)
-  const [debugInfo, setDebugInfo] = useState<any>({})
+interface DebugInfo {
+  hasSession?: boolean
+  userEmail?: string | undefined
+  emailConfirmed?: string | null
+  provider?: string
+  hasAccess?: boolean
+  signInAttempt?: {
+    email: string
+    hasData: boolean
+    hasUser: boolean
+    hasSession: boolean
+    error?: string
+    userVerified?: boolean
+  }
+  signUpAttempt?: {
+    email: string
+    hasData: boolean
+    hasUser: boolean
+    hasSession: boolean
+    error?: string
+  }
+  resendAttempt?: {
+    email: string
+    error?: string
+  }
+  googleSignInAttempt?: {
+    hasData: boolean
+    error?: string
+  }
+  sessionError?: string
+  checkAuthError?: string
+  googleSignInError?: string
+  [key: string]: any
+}
+
+export default function LoginPage(): JSX.Element {
+  const [email, setEmail] = useState<string>("")
+  const [password, setPassword] = useState<string>("")
+  const [fullName, setFullName] = useState<string>("")
+  const [loading, setLoading] = useState<boolean>(false)
+  const [error, setError] = useState<string>("")
+  const [message, setMessage] = useState<string>("")
+  const [showResendButton, setShowResendButton] = useState<boolean>(false)
+  const [pendingEmail, setPendingEmail] = useState<string>("")
+  const [showDebug, setShowDebug] = useState<boolean>(false)
+  const [debugInfo, setDebugInfo] = useState<DebugInfo>({})
   const router = useRouter()
 
   useEffect(() => {
     // Check if user is already logged in
-    const checkAuthState = async () => {
+    const checkAuthState = async (): Promise<void> => {
       try {
         console.log("Login page: Checking current auth state...")
 
@@ -43,26 +86,33 @@ export default function LoginPage() {
           return
         }
 
+        const currentUser = session?.user || null
+
         setDebugInfo((prev) => ({
           ...prev,
           hasSession: !!session,
-          userEmail: session?.user?.email,
-          emailConfirmed: session?.user?.email_confirmed_at,
+          userEmail: currentUser?.email,
+          emailConfirmed: currentUser?.email_confirmed_at,
+          provider: currentUser?.app_metadata?.provider,
+          hasAccess: currentUser ? hasVerifiedAccess(currentUser) : false
         }))
 
-        if (session?.user) {
+        if (currentUser) {
           console.log("Login page: Found existing session:", {
-            email: session.user.email,
-            confirmed: session.user.email_confirmed_at,
+            email: currentUser.email,
+            confirmed: currentUser.email_confirmed_at,
+            provider: currentUser.app_metadata?.provider,
+            hasAccess: hasVerifiedAccess(currentUser)
           })
 
-          if (session.user.email_confirmed_at) {
-            console.log("Login page: User is verified, redirecting to home")
+          // Check if user has verified access
+          if (hasVerifiedAccess(currentUser)) {
+            console.log("Login page: User has verified access, redirecting to home")
             router.push("/")
-          } else {
-            console.log("Login page: User exists but not verified")
+          } else if (needsEmailVerification(currentUser)) {
+            console.log("Login page: User exists but needs email verification")
             setShowResendButton(true)
-            setPendingEmail(session.user.email || "")
+            setPendingEmail(currentUser.email || "")
             setMessage(
               "Your email address needs to be verified. Please check your inbox or resend the confirmation email.",
             )
@@ -79,62 +129,82 @@ export default function LoginPage() {
     checkAuthState()
   }, [router])
 
-  const handleSignIn = async (e: React.FormEvent) => {
+  const handleSignIn = async (e: React.FormEvent<HTMLFormElement>): Promise<void> => {
     e.preventDefault()
     setLoading(true)
     setError("")
+    setMessage("")
     setShowResendButton(false)
 
     console.log("Attempting sign in for:", email)
 
-    const { data, error } = await signInWithEmail(email, password)
-    setDebugInfo((prev) => ({
-      ...prev,
-      signInAttempt: {
+    try {
+      const { data, error } = await signInWithEmail(email, password)
+      
+      const signInDebug = {
         email,
         hasData: !!data,
         hasUser: !!data?.user,
         hasSession: !!data?.session,
         error: error?.message,
-      },
-    }))
-
-    if (error) {
-      console.error("Sign in error:", error)
-      setError(error.message)
-
-      // Check if it's an email confirmation issue
-      if (
-        error.message.includes("confirmation") ||
-        error.message.includes("verify") ||
-        error.message.includes("Email not confirmed")
-      ) {
-        setShowResendButton(true)
-        setPendingEmail(email)
-        setMessage("Please verify your email address before signing in.")
+        userVerified: data?.user ? hasVerifiedAccess(data.user) : false
       }
-    } else if (data?.user) {
-      console.log("Sign in successful:", {
-        email: data.user.email,
-        confirmed: data.user.email_confirmed_at,
-        id: data.user.id,
-      })
 
-      if (data.user.email_confirmed_at) {
-        console.log("User is verified, redirecting to home")
-        router.push("/")
-      } else {
-        console.log("User signed in but not verified")
-        setShowResendButton(true)
-        setPendingEmail(data.user.email || "")
-        setMessage("Please verify your email address to continue.")
+      setDebugInfo((prev) => ({
+        ...prev,
+        signInAttempt: signInDebug,
+      }))
+
+      if (error) {
+        console.error("Sign in error:", error)
+        setError(error.message)
+
+        // Check if it's an email confirmation issue
+        if (
+          error.message.includes("confirmation") ||
+          error.message.includes("verify") ||
+          error.message.includes("Email not confirmed") ||
+          error.message.includes("email_not_confirmed")
+        ) {
+          setShowResendButton(true)
+          setPendingEmail(email)
+          setMessage("Please verify your email address before signing in.")
+        }
+      } else if (data?.user) {
+        console.log("Sign in successful:", {
+          email: data.user.email,
+          confirmed: data.user.email_confirmed_at,
+          provider: data.user.app_metadata?.provider,
+          id: data.user.id,
+        })
+
+        // Use the helper functions to check access
+        const userHasAccess = hasVerifiedAccess(data.user)
+        const userNeedsVerification = needsEmailVerification(data.user)
+
+        if (userHasAccess) {
+          console.log("User has verified access, redirecting to home")
+          router.push("/")
+        } else if (userNeedsVerification) {
+          console.log("Email user needs verification")
+          setShowResendButton(true)
+          setPendingEmail(data.user.email || "")
+          setMessage("Please verify your email address to continue.")
+        } else {
+          // This shouldn't happen, but handle it gracefully
+          console.warn("User signed in but access status unclear")
+          setError("Authentication incomplete. Please try again.")
+        }
       }
+    } catch (err) {
+      console.error("Sign in exception:", err)
+      setError("An unexpected error occurred. Please try again.")
+    } finally {
+      setLoading(false)
     }
-
-    setLoading(false)
   }
 
-  const handleSignUp = async (e: React.FormEvent) => {
+  const handleSignUp = async (e: React.FormEvent<HTMLFormElement>): Promise<void> => {
     e.preventDefault()
     setLoading(true)
     setError("")
@@ -142,71 +212,90 @@ export default function LoginPage() {
 
     console.log("Attempting sign up for:", email)
 
-    const { data, error } = await signUpWithEmail(email, password, fullName)
-    setDebugInfo((prev) => ({
-      ...prev,
-      signUpAttempt: {
+    try {
+      const { data, error } = await signUpWithEmail(email, password, fullName)
+      
+      const signUpDebug = {
         email,
         hasData: !!data,
         hasUser: !!data?.user,
         hasSession: !!data?.session,
         error: error?.message,
-      },
-    }))
+      }
 
-    if (error) {
-      console.error("Sign up error:", error)
-      setError(error.message)
-    } else {
-      console.log("Sign up successful, confirmation email should be sent")
-      setMessage("Please check your email and click the confirmation link to complete your registration!")
-      setPendingEmail(email)
-      setShowResendButton(true)
+      setDebugInfo((prev) => ({
+        ...prev,
+        signUpAttempt: signUpDebug,
+      }))
+
+      if (error) {
+        console.error("Sign up error:", error)
+        setError(error.message)
+      } else {
+        console.log("Sign up successful, confirmation email should be sent")
+        setMessage("Please check your email and click the confirmation link to complete your registration!")
+        setPendingEmail(email)
+        setShowResendButton(true)
+      }
+    } catch (err) {
+      console.error("Sign up exception:", err)
+      setError("An unexpected error occurred during sign up. Please try again.")
+    } finally {
+      setLoading(false)
     }
-
-    setLoading(false)
   }
 
-  const handleResendConfirmation = async () => {
+  const handleResendConfirmation = async (): Promise<void> => {
     setLoading(true)
     setError("")
     setMessage("")
 
     console.log("Resending confirmation to:", pendingEmail)
 
-    const { error } = await resendConfirmation(pendingEmail)
-    setDebugInfo((prev) => ({
-      ...prev,
-      resendAttempt: {
+    try {
+      const { error } = await resendConfirmation(pendingEmail)
+      
+      const resendDebug = {
         email: pendingEmail,
         error: error?.message,
-      },
-    }))
+      }
 
-    if (error) {
-      console.error("Resend error:", error)
-      setError(error.message)
-    } else {
-      console.log("Confirmation email resent successfully")
-      setMessage("Confirmation email sent! Please check your inbox and spam folder.")
+      setDebugInfo((prev) => ({
+        ...prev,
+        resendAttempt: resendDebug,
+      }))
+
+      if (error) {
+        console.error("Resend error:", error)
+        setError(error.message)
+      } else {
+        console.log("Confirmation email resent successfully")
+        setMessage("Confirmation email sent! Please check your inbox and spam folder.")
+      }
+    } catch (err) {
+      console.error("Resend exception:", err)
+      setError("Failed to send confirmation email. Please try again.")
+    } finally {
+      setLoading(false)
     }
-
-    setLoading(false)
   }
 
-  const handleGoogleSignIn = async () => {
+  const handleGoogleSignIn = async (): Promise<void> => {
     setLoading(true)
     setError("")
 
     try {
       console.log("Attempting Google sign in")
       const { data, error } = await signInWithGoogle()
+      
+      const googleDebug = {
+        hasData: !!data,
+        error: error?.message,
+      }
+
       setDebugInfo((prev) => ({
         ...prev,
-        googleSignInAttempt: {
-          hasData: !!data,
-          error: error?.message,
-        },
+        googleSignInAttempt: googleDebug,
       }))
 
       if (error) {
@@ -221,6 +310,20 @@ export default function LoginPage() {
       setDebugInfo((prev) => ({ ...prev, googleSignInError: String(err) }))
       setLoading(false)
     }
+  }
+
+  const toggleDebug = (): void => {
+    setShowDebug(!showDebug)
+  }
+
+  const clearForm = (): void => {
+    setEmail("")
+    setPassword("")
+    setFullName("")
+    setError("")
+    setMessage("")
+    setShowResendButton(false)
+    setPendingEmail("")
   }
 
   return (
@@ -252,8 +355,9 @@ export default function LoginPage() {
                       type="email"
                       placeholder="Enter your email"
                       value={email}
-                      onChange={(e) => setEmail(e.target.value)}
+                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEmail(e.target.value)}
                       required
+                      disabled={loading}
                     />
                   </div>
                   <div className="space-y-2">
@@ -263,8 +367,9 @@ export default function LoginPage() {
                       type="password"
                       placeholder="Enter your password"
                       value={password}
-                      onChange={(e) => setPassword(e.target.value)}
+                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPassword(e.target.value)}
                       required
+                      disabled={loading}
                     />
                   </div>
                   <Button type="submit" className="w-full" disabled={loading}>
@@ -282,7 +387,8 @@ export default function LoginPage() {
                       type="text"
                       placeholder="Enter your full name"
                       value={fullName}
-                      onChange={(e) => setFullName(e.target.value)}
+                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFullName(e.target.value)}
+                      disabled={loading}
                     />
                   </div>
                   <div className="space-y-2">
@@ -292,8 +398,9 @@ export default function LoginPage() {
                       type="email"
                       placeholder="Enter your email"
                       value={email}
-                      onChange={(e) => setEmail(e.target.value)}
+                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEmail(e.target.value)}
                       required
+                      disabled={loading}
                     />
                   </div>
                   <div className="space-y-2">
@@ -303,9 +410,10 @@ export default function LoginPage() {
                       type="password"
                       placeholder="Create a password (min. 6 characters)"
                       value={password}
-                      onChange={(e) => setPassword(e.target.value)}
+                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPassword(e.target.value)}
                       required
                       minLength={6}
+                      disabled={loading}
                     />
                   </div>
                   <Button type="submit" className="w-full" disabled={loading}>
@@ -324,7 +432,13 @@ export default function LoginPage() {
                   <span className="bg-white px-2 text-muted-foreground">Or continue with</span>
                 </div>
               </div>
-              <Button variant="outline" className="w-full mt-4" onClick={handleGoogleSignIn} disabled={loading}>
+              <Button 
+                variant="outline" 
+                className="w-full mt-4" 
+                onClick={handleGoogleSignIn} 
+                disabled={loading}
+                type="button"
+              >
                 <svg className="mr-2 h-4 w-4" viewBox="0 0 24 24">
                   <path
                     d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
@@ -350,7 +464,13 @@ export default function LoginPage() {
             {/* Resend Confirmation Button */}
             {showResendButton && (
               <div className="mt-4">
-                <Button variant="outline" className="w-full" onClick={handleResendConfirmation} disabled={loading}>
+                <Button 
+                  variant="outline" 
+                  className="w-full" 
+                  onClick={handleResendConfirmation} 
+                  disabled={loading}
+                  type="button"
+                >
                   <Mail className="mr-2 h-4 w-4" />
                   {loading ? "Sending..." : "Resend Confirmation Email"}
                 </Button>
@@ -359,9 +479,28 @@ export default function LoginPage() {
 
             {/* Debug Toggle */}
             <div className="mt-4">
-              <Button variant="ghost" size="sm" onClick={() => setShowDebug(!showDebug)} className="w-full text-xs">
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                onClick={toggleDebug} 
+                className="w-full text-xs"
+                type="button"
+              >
                 <Bug className="mr-2 h-3 w-3" />
                 {showDebug ? "Hide" : "Show"} Debug Info
+              </Button>
+            </div>
+
+            {/* Clear Form Button */}
+            <div className="mt-2">
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                onClick={clearForm} 
+                className="w-full text-xs"
+                type="button"
+              >
+                Clear Form
               </Button>
             </div>
 
@@ -397,7 +536,42 @@ export default function LoginPage() {
             {showDebug && (
               <div className="mt-4 p-4 bg-gray-100 rounded-lg text-xs font-mono overflow-auto max-h-96">
                 <h4 className="font-bold mb-2">Debug Information:</h4>
-                <pre>{JSON.stringify(debugInfo, null, 2)}</pre>
+                <div className="space-y-2">
+                  <div>
+                    <p className="font-semibold">Current State:</p>
+                    <pre>{JSON.stringify({
+                      hasSession: debugInfo.hasSession,
+                      userEmail: debugInfo.userEmail,
+                      emailConfirmed: debugInfo.emailConfirmed,
+                      provider: debugInfo.provider,
+                      hasAccess: debugInfo.hasAccess
+                    }, null, 2)}</pre>
+                  </div>
+                  {debugInfo.signInAttempt && (
+                    <div>
+                      <p className="font-semibold">Latest Sign In:</p>
+                      <pre>{JSON.stringify(debugInfo.signInAttempt, null, 2)}</pre>
+                    </div>
+                  )}
+                  {debugInfo.signUpAttempt && (
+                    <div>
+                      <p className="font-semibold">Latest Sign Up:</p>
+                      <pre>{JSON.stringify(debugInfo.signUpAttempt, null, 2)}</pre>
+                    </div>
+                  )}
+                  {debugInfo.resendAttempt && (
+                    <div>
+                      <p className="font-semibold">Latest Resend:</p>
+                      <pre>{JSON.stringify(debugInfo.resendAttempt, null, 2)}</pre>
+                    </div>
+                  )}
+                  {debugInfo.googleSignInAttempt && (
+                    <div>
+                      <p className="font-semibold">Google Sign In:</p>
+                      <pre>{JSON.stringify(debugInfo.googleSignInAttempt, null, 2)}</pre>
+                    </div>
+                  )}
+                </div>
               </div>
             )}
           </CardContent>

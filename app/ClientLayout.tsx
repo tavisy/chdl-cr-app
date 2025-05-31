@@ -8,16 +8,16 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Mail, AlertCircle, LogOut, UserIcon } from "lucide-react"
-import { resendConfirmation } from "@/lib/auth"
+import { resendConfirmation, hasVerifiedAccess, getCurrentUser } from "@/lib/auth"
 
 interface ClientLayoutProps {
   children: React.ReactNode
 }
 
 // Custom hook for localStorage with SSR safety
-function useLocalStorage(key: string, initialValue: boolean) {
+function useLocalStorage(key: string, initialValue: boolean): [boolean, (value: boolean) => void, () => void, boolean] {
   const [storedValue, setStoredValue] = useState<boolean>(initialValue)
-  const [isClient, setIsClient] = useState(false)
+  const [isClient, setIsClient] = useState<boolean>(false)
 
   useEffect(() => {
     setIsClient(true)
@@ -59,32 +59,41 @@ function useLocalStorage(key: string, initialValue: boolean) {
   return [storedValue, setValue, removeValue, isClient] as const
 }
 
-export default function ClientLayout({ children }: ClientLayoutProps) {
+interface NavLink {
+  href: string
+  label: string
+}
+
+export default function ClientLayout({ children }: ClientLayoutProps): JSX.Element | null {
   const [user, setUser] = useState<User | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [resendLoading, setResendLoading] = useState(false)
-  const [resendMessage, setResendMessage] = useState("")
-  const [resendError, setResendError] = useState("")
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const [loading, setLoading] = useState<boolean>(true)
+  const [resendLoading, setResendLoading] = useState<boolean>(false)
+  const [resendMessage, setResendMessage] = useState<string>("")
+  const [resendError, setResendError] = useState<string>("")
+  const [mobileMenuOpen, setMobileMenuOpen] = useState<boolean>(false)
 
   const [, , , isClient] = useLocalStorage("bypassVerification", false)
 
   const router = useRouter()
   const pathname = usePathname()
-  const authCheckRef = useRef(false)
+  const authCheckRef = useRef<boolean>(false)
 
   // Pages that don't require authentication
-  const publicPages = ["/login", "/auth/callback", "/auth/verify"]
-  const isPublicPage = publicPages.includes(pathname)
+  const publicPages: string[] = ["/login", "/auth/callback", "/auth/verify"]
+  const isPublicPage: boolean = publicPages.includes(pathname)
 
-  // Memoized access check function
+  // Memoized access check function using the optimized helper
   const checkUserAccess = useCallback((user: User | null): boolean => {
-    if (!user) return false
-
-    // Google OAuth users are automatically verified
-    const isGoogleUser = user.app_metadata?.provider === "google"
-
-    return !!(user.email_confirmed_at || isGoogleUser)
+    const hasAccess = hasVerifiedAccess(user)
+    
+    console.log("ClientLayout: User access check:", {
+      email: user?.email,
+      provider: user?.app_metadata?.provider,
+      emailConfirmed: user?.email_confirmed_at,
+      hasAccess
+    })
+    
+    return hasAccess
   }, [])
 
   // Initial authentication check
@@ -92,21 +101,14 @@ export default function ClientLayout({ children }: ClientLayoutProps) {
     if (authCheckRef.current) return
     authCheckRef.current = true
 
-    const checkAuth = async () => {
+    const checkAuth = async (): Promise<void> => {
       try {
         console.log("ClientLayout: Initial auth check...")
 
-        const { data: sessionData, error: sessionError } = await supabase.auth.getSession()
+        // Use the optimized getCurrentUser function to get fresh user data
+        const currentUser = await getCurrentUser()
 
-        if (sessionError) {
-          console.error("ClientLayout: Session error:", sessionError)
-          setUser(null)
-          setLoading(false)
-          return
-        }
-
-        if (sessionData.session?.user) {
-          const currentUser = sessionData.session.user
+        if (currentUser) {
           console.log("ClientLayout: User found:", {
             email: currentUser.email,
             confirmed: !!currentUser.email_confirmed_at,
@@ -115,7 +117,7 @@ export default function ClientLayout({ children }: ClientLayoutProps) {
 
           setUser(currentUser)
         } else {
-          console.log("ClientLayout: No active session")
+          console.log("ClientLayout: No active user")
           setUser(null)
         }
       } catch (err) {
@@ -135,12 +137,14 @@ export default function ClientLayout({ children }: ClientLayoutProps) {
 
     // Redirect unauthenticated users from protected pages
     if (!user && !isPublicPage) {
+      console.log("ClientLayout: Redirecting unauthenticated user to login")
       router.push("/login")
       return
     }
 
     // Redirect authenticated users from login page
     if (user && pathname === "/login") {
+      console.log("ClientLayout: Redirecting authenticated user to home")
       router.push("/")
       return
     }
@@ -154,7 +158,8 @@ export default function ClientLayout({ children }: ClientLayoutProps) {
       console.log("ClientLayout: Auth state change:", event)
 
       if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED") {
-        const currentUser = session?.user || null
+        // Get fresh user data to ensure we have the latest verification status
+        const currentUser = await getCurrentUser()
         setUser(currentUser)
       } else if (event === "SIGNED_OUT") {
         setUser(null)
@@ -168,7 +173,7 @@ export default function ClientLayout({ children }: ClientLayoutProps) {
   useEffect(() => {
     if (!mobileMenuOpen) return
 
-    const handleClickOutside = (event: MouseEvent) => {
+    const handleClickOutside = (event: MouseEvent): void => {
       const target = event.target as Element
       if (!target.closest("nav")) {
         setMobileMenuOpen(false)
@@ -180,7 +185,7 @@ export default function ClientLayout({ children }: ClientLayoutProps) {
   }, [mobileMenuOpen])
 
   // Event handlers
-  const handleResendConfirmation = async () => {
+  const handleResendConfirmation = async (): Promise<void> => {
     if (!user?.email) return
 
     setResendLoading(true)
@@ -196,23 +201,24 @@ export default function ClientLayout({ children }: ClientLayoutProps) {
         setResendMessage("Confirmation email sent! Please check your inbox and spam folder.")
       }
     } catch (err) {
+      console.error("ClientLayout: Resend confirmation error:", err)
       setResendError("Failed to send confirmation email. Please try again.")
     } finally {
       setResendLoading(false)
     }
   }
 
-  const handleSignOut = async () => {
+  const handleSignOut = async (): Promise<void> => {
     try {
-      console.log("Signing out user...")
+      console.log("ClientLayout: Signing out user...")
       await supabase.auth.signOut()
       // Router redirect will be handled by the auth state change
     } catch (error) {
-      console.error("Sign out error:", error)
+      console.error("ClientLayout: Sign out error:", error)
     }
   }
 
-  const toggleMobileMenu = (e: React.MouseEvent) => {
+  const toggleMobileMenu = (e: React.MouseEvent<HTMLButtonElement>): void => {
     e.stopPropagation()
     setMobileMenuOpen(!mobileMenuOpen)
   }
@@ -236,10 +242,10 @@ export default function ClientLayout({ children }: ClientLayoutProps) {
     return null
   }
 
-  // Check access permissions
+  // Check access permissions using the optimized function
   const hasAccess = checkUserAccess(user)
 
-  // Email verification screen
+  // Email verification screen for users who need verification
   if (!hasAccess) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100 p-4">
@@ -266,7 +272,12 @@ export default function ClientLayout({ children }: ClientLayoutProps) {
               </p>
             </div>
 
-            <Button onClick={handleResendConfirmation} disabled={resendLoading} variant="outline" className="w-full">
+            <Button 
+              onClick={handleResendConfirmation} 
+              disabled={resendLoading} 
+              variant="outline" 
+              className="w-full"
+            >
               <Mail className="mr-2 h-4 w-4" />
               {resendLoading ? "Sending..." : "Resend Verification Email"}
             </Button>
@@ -300,6 +311,7 @@ export default function ClientLayout({ children }: ClientLayoutProps) {
                 <br />
                 Provider: {user.app_metadata?.provider || "email"}
                 <br />
+                Has Access: {hasAccess ? "Yes" : "No"}
               </div>
             )}
           </CardContent>
@@ -309,7 +321,7 @@ export default function ClientLayout({ children }: ClientLayoutProps) {
   }
 
   // Navigation links data
-  const navLinks = [
+  const navLinks: NavLink[] = [
     { href: "/", label: "Overview" },
     { href: "/market-disruption", label: "Market Disruption" },
     { href: "/competitive-analysis", label: "Competitive Analysis" },
@@ -332,7 +344,12 @@ export default function ClientLayout({ children }: ClientLayoutProps) {
             </div>
 
             {/* Mobile menu button */}
-            <button onClick={toggleMobileMenu} className="md:hidden flex flex-col gap-1 p-2" aria-label="Toggle menu">
+            <button 
+              onClick={toggleMobileMenu} 
+              className="md:hidden flex flex-col gap-1 p-2" 
+              aria-label="Toggle menu"
+              type="button"
+            >
               <span
                 className={`w-6 h-0.5 bg-slate-900 transition-all ${mobileMenuOpen ? "rotate-45 translate-y-2" : ""}`}
               />
@@ -344,8 +361,12 @@ export default function ClientLayout({ children }: ClientLayoutProps) {
 
             {/* Desktop navigation */}
             <div className="hidden md:flex items-center gap-6 text-sm">
-              {navLinks.map(({ href, label }) => (
-                <a key={href} href={href} className="text-slate-600 hover:text-slate-900 transition-colors">
+              {navLinks.map(({ href, label }: NavLink) => (
+                <a 
+                  key={href} 
+                  href={href} 
+                  className="text-slate-600 hover:text-slate-900 transition-colors"
+                >
                   {label}
                 </a>
               ))}
@@ -376,7 +397,7 @@ export default function ClientLayout({ children }: ClientLayoutProps) {
             } overflow-hidden`}
           >
             <div className="py-4 space-y-3 border-t border-slate-200 mt-3">
-              {navLinks.map(({ href, label }) => (
+              {navLinks.map(({ href, label }: NavLink) => (
                 <a
                   key={href}
                   href={href}
