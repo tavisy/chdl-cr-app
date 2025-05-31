@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { BarChart3, Users, Target, Lightbulb, TrendingUp, Globe, TrendingDown, BookOpen } from "lucide-react"
-import { Link } from "react-router-dom"
+import Link from "next/link"
 
 export default function HomePage() {
   const [activeSection, setActiveSection] = useState("overview")
@@ -39,6 +39,7 @@ export default function HomePage() {
             </p>
           </div>
         </div>
+        {/* Recommended Image: Sophisticated whiskey distillery landscape with Canadian elements */}
         <div className="absolute bottom-0 left-0 right-0 h-32 bg-gradient-to-t from-slate-50 to-transparent"></div>
       </div>
 
@@ -61,7 +62,7 @@ export default function HomePage() {
                     className="flex items-center gap-2"
                     asChild
                   >
-                    <Link to="/recommendations">
+                    <Link href="/recommendations">
                       <Icon className="h-4 w-4" />
                       {section.title}
                     </Link>
@@ -78,7 +79,7 @@ export default function HomePage() {
                     className="flex items-center gap-2"
                     asChild
                   >
-                    <Link to="/canadian-identity">
+                    <Link href="/canadian-identity">
                       <Icon className="h-4 w-4" />
                       {section.title}
                     </Link>
@@ -95,7 +96,7 @@ export default function HomePage() {
                     className="flex items-center gap-2"
                     asChild
                   >
-                    <Link to="/references">
+                    <Link href="/references">
                       <Icon className="h-4 w-4" />
                       {section.title}
                     </Link>
@@ -480,7 +481,7 @@ export default function HomePage() {
           <div className="max-w-4xl mx-auto text-center">
             <h2 className="text-3xl font-bold mb-8">Explore Detailed Analysis</h2>
             <div className="grid md:grid-cols-3 gap-6">
-              <Link to="/competitive-analysis">
+              <Link href="/competitive-analysis">
                 <Card className="p-6 bg-slate-800 border-slate-700 hover:bg-slate-700 transition-colors cursor-pointer h-full">
                   <CardContent className="p-0">
                     <Target className="h-8 w-8 text-amber-400 mb-4 mx-auto" />
@@ -490,7 +491,7 @@ export default function HomePage() {
                 </Card>
               </Link>
 
-              <Link to="/consumer-insights">
+              <Link href="/consumer-insights">
                 <Card className="p-6 bg-slate-800 border-slate-700 hover:bg-slate-700 transition-colors cursor-pointer h-full">
                   <CardContent className="p-0">
                     <Users className="h-8 w-8 text-blue-400 mb-4 mx-auto" />
@@ -500,7 +501,7 @@ export default function HomePage() {
                 </Card>
               </Link>
 
-              <Link to="/recommendations">
+              <Link href="/recommendations">
                 <Card className="p-6 bg-slate-800 border-slate-700 hover:bg-slate-700 transition-colors cursor-pointer h-full">
                   <CardContent className="p-0">
                     <Lightbulb className="h-8 w-8 text-green-400 mb-4 mx-auto" />
