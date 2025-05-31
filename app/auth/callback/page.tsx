@@ -19,6 +19,32 @@ export default function AuthCallback() {
         console.log("AuthCallback: Processing auth callback...")
         console.log("AuthCallback URL:", window.location.href)
 
+        // Check if we already have a session first
+        try {
+          const { data: sessionData } = await supabase.auth.getSession()
+
+          if (sessionData.session?.user) {
+            console.log("AuthCallback: Existing session found for:", sessionData.session.user.email)
+
+            // Check if this is a Google user
+            const isGoogleUser = sessionData.session.user.app_metadata?.provider === "google"
+
+            // Log access
+            await logAccess(sessionData.session.user.id, isGoogleUser ? "google" : "email")
+
+            // Store bypass in localStorage to ensure access
+            localStorage.setItem("bypassVerification", "true")
+
+            setStatus("success")
+            setMessage(`Successfully signed in! Redirecting...`)
+            setTimeout(() => router.push("/"), 2000)
+            return
+          }
+        } catch (sessionError) {
+          console.error("AuthCallback: Error checking existing session:", sessionError)
+          // Continue with other auth methods
+        }
+
         // Parse URL parameters
         const urlParams = new URLSearchParams(window.location.search)
         const hashParams = new URLSearchParams(window.location.hash.substring(1))
@@ -39,99 +65,55 @@ export default function AuthCallback() {
           return
         }
 
-        // Check for OAuth tokens in hash (Google OAuth)
-        const accessToken = hashParams.get("access_token")
-        const refreshToken = hashParams.get("refresh_token")
-        const tokenType = hashParams.get("token_type")
+        // Check for code parameter (PKCE flow - email verification)
+        const code = urlParams.get("code")
 
-        // Check for OAuth code in URL params (some OAuth flows)
-        const oauthCode = urlParams.get("code")
+        // Check for state parameter (OAuth flow)
         const state = urlParams.get("state")
 
-        console.log("AuthCallback: Token detection:", {
-          hasAccessToken: !!accessToken,
-          hasRefreshToken: !!refreshToken,
-          hasOauthCode: !!oauthCode,
-          tokenType,
-          state,
+        // Check for provider parameter (OAuth flow)
+        const provider = urlParams.get("provider") || hashParams.get("provider")
+
+        console.log("AuthCallback: Auth parameters:", {
+          hasCode: !!code,
+          hasState: !!state,
+          provider,
         })
 
-        // Handle OAuth tokens (Google sign-in with tokens)
-        if (accessToken && refreshToken) {
-          console.log("AuthCallback: Processing OAuth tokens from hash...")
+        // If we have a code, try to exchange it
+        if (code) {
+          console.log("AuthCallback: Processing code...")
 
           try {
-            const { data, error: sessionError } = await supabase.auth.setSession({
-              access_token: accessToken,
-              refresh_token: refreshToken,
-            })
-
-            if (sessionError) {
-              console.error("AuthCallback: OAuth session error:", sessionError)
-              setStatus("error")
-              setMessage("Failed to establish session from Google. Please try signing in again.")
-              setDebugInfo({ sessionError, accessToken: !!accessToken, refreshToken: !!refreshToken })
-              return
-            }
-
-            if (data.user && data.session) {
-              console.log("AuthCallback: OAuth session established for user:", data.user.email)
-              await logAccess(data.user.id, "google")
-              localStorage.setItem("bypassVerification", "true")
-
-              setStatus("success")
-              setMessage("Successfully signed in with Google! Redirecting...")
-              setTimeout(() => router.push("/"), 2000)
-              return
-            }
-          } catch (setSessionError) {
-            console.error("AuthCallback: Error setting OAuth session:", setSessionError)
-            setStatus("error")
-            setMessage("Error processing Google authentication. Please try again.")
-            setDebugInfo({ setSessionError })
-            return
-          }
-        }
-
-        // Handle OAuth code (Google sign-in with code - newer flow)
-        if (oauthCode && !accessToken) {
-          console.log("AuthCallback: Processing OAuth code...")
-
-          try {
-            // For OAuth code, we need to exchange it for a session
-            const { data, error: exchangeError } = await supabase.auth.exchangeCodeForSession(oauthCode)
+            const { data, error: exchangeError } = await supabase.auth.exchangeCodeForSession(code)
 
             if (exchangeError) {
-              console.error("AuthCallback: OAuth code exchange error:", exchangeError)
-
-              // If this is clearly an OAuth flow but failing, provide better error message
-              if (state || urlParams.get("provider")) {
-                setStatus("error")
-                setMessage("Google sign-in failed. Please try again or use email sign-in.")
-                setDebugInfo({ exchangeError, isOAuthFlow: true, state, provider: urlParams.get("provider") })
-              } else {
-                setStatus("error")
-                setMessage("Failed to verify email. Please try again.")
-                setDebugInfo({ exchangeError, isEmailFlow: true })
-              }
+              console.error("AuthCallback: Code exchange error:", exchangeError)
+              setStatus("error")
+              setMessage("Authentication failed. Please try signing in again.")
+              setDebugInfo({ exchangeError })
               return
             }
 
             if (data.session && data.user) {
-              console.log("AuthCallback: OAuth code exchange successful for user:", data.user.email)
+              console.log("AuthCallback: Code exchange successful for user:", data.user.email)
 
               // Determine if this was OAuth or email verification based on user metadata
               const loginMethod = data.user.app_metadata?.provider === "google" ? "google" : "email"
               await logAccess(data.user.id, loginMethod)
+
+              // Store bypass in localStorage to ensure access
               localStorage.setItem("bypassVerification", "true")
 
               setStatus("success")
-              setMessage(
-                loginMethod === "google"
-                  ? "Successfully signed in with Google! Redirecting..."
-                  : "Email verified successfully! Redirecting...",
-              )
+              setMessage("Authentication successful! Redirecting...")
               setTimeout(() => router.push("/"), 2000)
+              return
+            } else {
+              console.error("AuthCallback: Code exchange succeeded but no session/user returned")
+              setStatus("error")
+              setMessage("Authentication process incomplete. Please try signing in again.")
+              setDebugInfo({ data })
               return
             }
           } catch (exchangeError) {
@@ -143,44 +125,17 @@ export default function AuthCallback() {
           }
         }
 
-        // Check if we already have a session
-        try {
-          const { data: sessionData, error: sessionError } = await supabase.auth.getSession()
-
-          if (sessionError) {
-            console.error("AuthCallback: Error getting existing session:", sessionError)
-            setStatus("error")
-            setMessage("Error checking authentication status. Please try signing in again.")
-            setDebugInfo({ sessionError })
-            return
-          }
-
-          if (sessionData.session?.user) {
-            console.log("AuthCallback: Existing session found for:", sessionData.session.user.email)
-            localStorage.setItem("bypassVerification", "true")
-
-            setStatus("success")
-            setMessage("Already authenticated! Redirecting...")
-            setTimeout(() => router.push("/"), 1000)
-            return
-          } else {
-            console.log("AuthCallback: No authentication data found")
-            setStatus("error")
-            setMessage("No authentication data found. Please try signing in again.")
-            setDebugInfo({
-              urlParams: Object.fromEntries(urlParams.entries()),
-              hashParams: Object.fromEntries(hashParams.entries()),
-              hasSession: false,
-            })
-            return
-          }
-        } catch (sessionError) {
-          console.error("AuthCallback: Error checking existing session:", sessionError)
-          setStatus("error")
-          setMessage("Error checking authentication status. Please try signing in again.")
-          setDebugInfo({ sessionError })
-          return
-        }
+        // If we get here, we don't have any authentication data
+        console.log("AuthCallback: No authentication data found")
+        setStatus("error")
+        setMessage("No authentication data found. Please try signing in again.")
+        setDebugInfo({
+          urlParams: Object.fromEntries(urlParams.entries()),
+          hashParams: Object.fromEntries(hashParams.entries()),
+          hasCode: !!code,
+          hasState: !!state,
+          provider,
+        })
       } catch (err) {
         console.error("AuthCallback: Unexpected error:", err)
         setStatus("error")
