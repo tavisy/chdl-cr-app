@@ -41,33 +41,60 @@ export default function ClientLayout({ children }: ClientLayoutProps) {
       try {
         console.log("ClientLayout: Initial auth check...")
 
-        // Get the user session
-        const {
-          data: { session },
-        } = await supabase.auth.getSession()
+        // First get the current session without trying to refresh
+        const { data: sessionData } = await supabase.auth.getSession()
 
-        if (!session) {
+        // If we have a session, try to refresh it to get the latest data
+        if (sessionData.session) {
+          console.log("ClientLayout: Session found, attempting refresh...")
+
+          try {
+            const { data: refreshData } = await supabase.auth.refreshSession()
+            const session = refreshData.session
+
+            if (session) {
+              console.log("ClientLayout: Session refreshed successfully, user:", {
+                email: session.user.email,
+                confirmed: !!session.user.email_confirmed_at,
+                confirmedAt: session.user.email_confirmed_at,
+                provider: session.user.app_metadata?.provider,
+                bypassActive: bypassVerification,
+              })
+
+              setUser(session.user)
+
+              // If user is confirmed via Google OAuth, automatically set bypass
+              if (session.user.app_metadata?.provider === "google" && session.user.email_confirmed_at) {
+                console.log("ClientLayout: Google user with confirmed email, setting bypass")
+                setBypassVerification(true)
+                if (typeof window !== "undefined") {
+                  localStorage.setItem("bypassVerification", "true")
+                }
+              }
+            } else {
+              // Refresh failed but we still have the original session
+              console.log("ClientLayout: Session refresh returned no session, using original")
+              setUser(sessionData.session.user)
+            }
+          } catch (refreshError) {
+            // If refresh fails, fall back to the original session
+            console.log("ClientLayout: Session refresh failed, using original session", refreshError)
+            setUser(sessionData.session.user)
+          }
+        } else {
+          // No session found
           console.log("ClientLayout: No session found")
           setUser(null)
-          setLoading(false)
 
           if (!isPublicPage) {
             router.push("/login")
           }
-          return
         }
 
-        console.log("ClientLayout: Session found, user:", {
-          email: session.user.email,
-          confirmed: !!session.user.email_confirmed_at,
-          bypassActive: bypassVerification,
-        })
-
-        setUser(session.user)
         setLoading(false)
 
         // If on login page but already authenticated, redirect to home
-        if (pathname === "/login" && session.user) {
+        if (pathname === "/login" && user) {
           router.push("/")
         }
       } catch (err) {
@@ -185,10 +212,13 @@ export default function ClientLayout({ children }: ClientLayoutProps) {
   }
 
   // Check if user should have access (either email confirmed OR bypass is enabled)
-  const hasAccess = user.email_confirmed_at || bypassVerification
+  const isGoogleUser = user.app_metadata?.provider === "google"
+  const hasAccess = user.email_confirmed_at || bypassVerification || isGoogleUser
 
   console.log("Access check:", {
     emailConfirmed: !!user.email_confirmed_at,
+    confirmedAt: user.email_confirmed_at,
+    isGoogleUser,
     bypassActive: bypassVerification,
     hasAccess,
   })
