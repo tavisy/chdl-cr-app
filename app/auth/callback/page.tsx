@@ -15,8 +15,7 @@ export default function AuthCallback() {
   useEffect(() => {
     const handleAuthCallback = async () => {
       try {
-        console.log("AuthCallback: Starting auth callback process...")
-        console.log("AuthCallback: Current URL:", window.location.href)
+        console.log("AuthCallback: Processing auth callback...")
 
         // Check for error parameters first
         const urlParams = new URLSearchParams(window.location.search)
@@ -34,13 +33,6 @@ export default function AuthCallback() {
         const hashParams = new URLSearchParams(window.location.hash.substring(1))
         const accessToken = hashParams.get("access_token")
         const refreshToken = hashParams.get("refresh_token")
-        const type = hashParams.get("type")
-
-        console.log("AuthCallback: Hash params:", {
-          hasAccessToken: !!accessToken,
-          hasRefreshToken: !!refreshToken,
-          type,
-        })
 
         if (accessToken && refreshToken) {
           console.log("AuthCallback: Setting session from tokens...")
@@ -59,21 +51,15 @@ export default function AuthCallback() {
 
           if (data.user) {
             console.log("AuthCallback: Session established for user:", data.user.email)
-
-            // Log access
-            const loginMethod = type === "signup" ? "email" : "google"
-            await logAccess(data.user.id, loginMethod)
-
+            await logAccess(data.user.id, "google")
             setStatus("success")
             setMessage("Authentication successful! Redirecting...")
-
-            // Redirect after a short delay
             setTimeout(() => router.push("/"), 2000)
             return
           }
         }
 
-        // Check for code parameter (PKCE flow)
+        // Check for code parameter (PKCE flow - email verification)
         const code = urlParams.get("code")
 
         if (code) {
@@ -89,15 +75,14 @@ export default function AuthCallback() {
           }
 
           if (data.session && data.user) {
-            console.log("AuthCallback: Code exchange successful for user:", data.user.email)
+            console.log("AuthCallback: Email verification successful for user:", data.user.email)
 
-            // Log access
+            // Force refresh the session to ensure we have the latest user data
+            await supabase.auth.refreshSession()
+
             await logAccess(data.user.id, "email")
-
             setStatus("success")
             setMessage("Email verified successfully! Redirecting...")
-
-            // Redirect after a short delay
             setTimeout(() => router.push("/"), 2000)
             return
           }

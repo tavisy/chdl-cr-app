@@ -2,134 +2,78 @@ import { supabase } from "./supabase"
 import type { User } from "@supabase/supabase-js"
 
 export async function signInWithEmail(email: string, password: string) {
-  try {
-    console.log("Auth: Signing in with email:", email)
+  const { data, error } = await supabase.auth.signInWithPassword({
+    email,
+    password,
+  })
 
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    })
-
-    console.log("Auth: Sign in result:", {
-      hasUser: !!data.user,
-      hasSession: !!data.session,
-      error: error?.message,
-    })
-
-    if (data.user && !error) {
-      await logAccess(data.user.id, "email")
-    }
-
-    return { data, error }
-  } catch (err) {
-    console.error("Auth: Sign in error:", err)
-    return { data: null, error: { message: "An unexpected error occurred" } }
+  if (data.user && !error) {
+    await logAccess(data.user.id, "email")
   }
+
+  return { data, error }
 }
 
 export async function signUpWithEmail(email: string, password: string, fullName?: string) {
-  try {
-    console.log("Auth: Signing up with email:", email)
-
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: {
-          full_name: fullName,
-        },
-        emailRedirectTo: `${window.location.origin}/auth/callback`,
+  const { data, error } = await supabase.auth.signUp({
+    email,
+    password,
+    options: {
+      data: {
+        full_name: fullName,
       },
-    })
+      emailRedirectTo: `${window.location.origin}/auth/callback`,
+    },
+  })
 
-    console.log("Auth: Sign up result:", {
-      hasUser: !!data.user,
-      hasSession: !!data.session,
-      error: error?.message,
-      emailConfirmationSent: data.user && !data.user.email_confirmed_at,
-    })
-
-    return { data, error }
-  } catch (err) {
-    console.error("Auth: Sign up error:", err)
-    return { data: null, error: { message: "An unexpected error occurred" } }
-  }
+  return { data, error }
 }
 
 export async function signInWithGoogle() {
-  try {
-    console.log("Auth: Signing in with Google")
+  const { data, error } = await supabase.auth.signInWithOAuth({
+    provider: "google",
+    options: {
+      redirectTo: `${window.location.origin}/auth/callback`,
+    },
+  })
 
-    const { data, error } = await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
-      },
-    })
-
-    console.log("Auth: Google sign in result:", { error: error?.message })
-    return { data, error }
-  } catch (err) {
-    console.error("Auth: Google sign in error:", err)
-    return { data: null, error: { message: "An unexpected error occurred" } }
-  }
+  return { data, error }
 }
 
 export async function signOut() {
-  try {
-    console.log("Auth: Signing out")
-    const { error } = await supabase.auth.signOut()
-    console.log("Auth: Sign out result:", { error: error?.message })
-    return { error }
-  } catch (err) {
-    console.error("Auth: Sign out error:", err)
-    return { error: { message: "An unexpected error occurred" } }
-  }
+  const { error } = await supabase.auth.signOut()
+  return { error }
 }
 
 export async function getCurrentUser(): Promise<User | null> {
   try {
-    // First check if we have a session
+    // Force refresh the session to get the latest user data
     const {
-      data: { session },
-      error: sessionError,
-    } = await supabase.auth.getSession()
+      data: { user },
+      error,
+    } = await supabase.auth.getUser()
 
-    if (sessionError || !session) {
-      console.log("Auth: No current session")
+    if (error || !user) {
       return null
     }
 
-    console.log("Auth: Current user:", {
-      email: session.user?.email,
-      confirmed: !!session.user?.email_confirmed_at,
-    })
-
-    return session.user
+    return user
   } catch (err) {
-    console.error("Auth: Error getting current user:", err)
+    console.error("Error getting current user:", err)
     return null
   }
 }
 
 export async function resendConfirmation(email: string) {
-  try {
-    console.log("Auth: Resending confirmation to:", email)
+  const { data, error } = await supabase.auth.resend({
+    type: "signup",
+    email,
+    options: {
+      emailRedirectTo: `${window.location.origin}/auth/callback`,
+    },
+  })
 
-    const { data, error } = await supabase.auth.resend({
-      type: "signup",
-      email,
-      options: {
-        emailRedirectTo: `${window.location.origin}/auth/callback`,
-      },
-    })
-
-    console.log("Auth: Resend result:", { error: error?.message })
-    return { data, error }
-  } catch (err) {
-    console.error("Auth: Resend error:", err)
-    return { data: null, error: { message: "An unexpected error occurred" } }
-  }
+  return { data, error }
 }
 
 export async function logAccess(userId: string, method: "email" | "google") {
@@ -143,11 +87,9 @@ export async function logAccess(userId: string, method: "email" | "google") {
     })
 
     if (error) {
-      console.error("Auth: Failed to log access:", error)
-    } else {
-      console.log("Auth: Access logged successfully")
+      console.error("Failed to log access:", error)
     }
   } catch (err) {
-    console.error("Auth: Error logging access:", err)
+    console.error("Error logging access:", err)
   }
 }
