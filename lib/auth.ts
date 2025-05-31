@@ -21,6 +21,9 @@ interface SignOutResponse {
   error: AuthError | null
 }
 
+// Track last logged access check to prevent spam
+let lastAccessCheckLog: { userId?: string; hasAccess?: boolean; timestamp?: number } = {}
+
 export async function signInWithEmail(email: string, password: string): Promise<SignInResponse> {
   console.log("Auth: Attempting email sign in for:", email)
   
@@ -96,6 +99,8 @@ export async function signOut(): Promise<SignOutResponse> {
     console.error("Auth: Sign out error:", error.message)
   } else {
     console.log("Auth: Sign out successful")
+    // Clear the access check log cache
+    lastAccessCheckLog = {}
   }
   
   return { error }
@@ -163,7 +168,12 @@ export async function resendConfirmation(email: string): Promise<ResendResponse>
  */
 export function hasVerifiedAccess(user: User | null): boolean {
   if (!user) {
-    console.log("Auth: No user provided for access check")
+    // Only log if we haven't logged this state recently
+    const now = Date.now()
+    if (!lastAccessCheckLog.timestamp || now - lastAccessCheckLog.timestamp > 5000) {
+      console.log("Auth: No user provided for access check")
+      lastAccessCheckLog = { timestamp: now }
+    }
     return false
   }
   
@@ -171,18 +181,38 @@ export function hasVerifiedAccess(user: User | null): boolean {
   const isGoogleUser = user.app_metadata?.provider === "google"
   
   if (isGoogleUser) {
-    console.log("Auth: Google user has automatic access:", user.email)
+    // Only log if this user hasn't been logged recently or access status changed
+    const now = Date.now()
+    const shouldLog = !lastAccessCheckLog.timestamp || 
+                     lastAccessCheckLog.userId !== user.id ||
+                     lastAccessCheckLog.hasAccess !== true ||
+                     now - lastAccessCheckLog.timestamp > 30000 // 30 seconds
+    
+    if (shouldLog) {
+      console.log("Auth: Google user has automatic access:", user.email)
+      lastAccessCheckLog = { userId: user.id, hasAccess: true, timestamp: now }
+    }
     return true
   }
   
   // For email users, check if email is confirmed
   const isEmailVerified = !!user.email_confirmed_at
   
-  console.log("Auth: Email user access check:", {
-    email: user.email,
-    emailConfirmed: user.email_confirmed_at,
-    hasAccess: isEmailVerified
-  })
+  // Only log if this is a new user, access status changed, or it's been a while
+  const now = Date.now()
+  const shouldLog = !lastAccessCheckLog.timestamp || 
+                   lastAccessCheckLog.userId !== user.id ||
+                   lastAccessCheckLog.hasAccess !== isEmailVerified ||
+                   now - lastAccessCheckLog.timestamp > 30000 // 30 seconds
+  
+  if (shouldLog) {
+    console.log("Auth: Email user access check:", {
+      email: user.email,
+      emailConfirmed: user.email_confirmed_at,
+      hasAccess: isEmailVerified
+    })
+    lastAccessCheckLog = { userId: user.id, hasAccess: isEmailVerified, timestamp: now }
+  }
   
   return isEmailVerified
 }

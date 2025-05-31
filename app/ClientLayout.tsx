@@ -2,6 +2,7 @@
 import { useEffect, useState, useCallback, useRef, useMemo } from "react"
 import type React from "react"
 import { useRouter, usePathname } from "next/navigation"
+import Link from "next/link"
 import { supabase } from "@/lib/supabase"
 import type { User } from "@supabase/supabase-js"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -67,16 +68,17 @@ interface NavLink {
 export default function ClientLayout({ children }: ClientLayoutProps): JSX.Element | null {
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState<boolean>(true)
+  const [authInitialized, setAuthInitialized] = useState<boolean>(false)
   const [resendLoading, setResendLoading] = useState<boolean>(false)
   const [resendMessage, setResendMessage] = useState<string>("")
   const [resendError, setResendError] = useState<string>("")
   const [mobileMenuOpen, setMobileMenuOpen] = useState<boolean>(false)
+  const [showLoadingSpinner, setShowLoadingSpinner] = useState<boolean>(false)
 
   const [, , , isClient] = useLocalStorage("bypassVerification", false)
 
   const router = useRouter()
   const pathname = usePathname()
-  const authCheckRef = useRef<boolean>(false)
   const loadingTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
   // Pages that don't require authentication
@@ -89,46 +91,51 @@ export default function ClientLayout({ children }: ClientLayoutProps): JSX.Eleme
     
     const hasAccess = hasVerifiedAccess(user)
     
-    // Only log once when user or access status changes
-    console.log("ClientLayout: User access check:", {
-      email: user?.email,
-      provider: user?.app_metadata?.provider,
-      emailConfirmed: user?.email_confirmed_at,
-      hasAccess
-    })
+    // Only log access check in ClientLayout when there's a significant change
+    if (process.env.NODE_ENV === "development") {
+      console.log("ClientLayout: User access check:", {
+        email: user?.email,
+        provider: user?.app_metadata?.provider,
+        emailConfirmed: user?.email_confirmed_at,
+        hasAccess
+      })
+    }
     
     return hasAccess
   }, [user?.id, user?.email_confirmed_at, user?.app_metadata?.provider])
 
-  // Reset loading state on pathname change for authenticated users
+  // Add a small delay before showing loading spinner to prevent flashing
   useEffect(() => {
-    if (!isPublicPage && user && userHasAccess) {
-      console.log("ClientLayout: Page navigation detected, ensuring loading is false")
-      setLoading(false)
+    if (loading && !authInitialized) {
+      loadingTimeoutRef.current = setTimeout(() => {
+        setShowLoadingSpinner(true)
+      }, 200) // 200ms delay
+    } else {
+      setShowLoadingSpinner(false)
+      if (loadingTimeoutRef.current) {
+        clearTimeout(loadingTimeoutRef.current)
+        loadingTimeoutRef.current = null
+      }
     }
-  }, [pathname, user, userHasAccess, isPublicPage])
 
-  // Initial authentication check
+    return () => {
+      if (loadingTimeoutRef.current) {
+        clearTimeout(loadingTimeoutRef.current)
+      }
+    }
+  }, [loading, authInitialized])
+
+  // ONE-TIME authentication initialization
   useEffect(() => {
-    const checkAuth = async (): Promise<void> => {
+    const initializeAuth = async (): Promise<void> => {
       try {
-        console.log("ClientLayout: Initial auth check...")
-
-        // Set a fallback timeout to prevent infinite loading
-        if (loadingTimeoutRef.current) {
-          clearTimeout(loadingTimeoutRef.current)
-        }
-        
-        loadingTimeoutRef.current = setTimeout(() => {
-          console.log("ClientLayout: Auth check timeout, forcing loading to false")
-          setLoading(false)
-        }, 5000) // 5 second timeout
+        console.log("ClientLayout: ONE-TIME auth initialization...")
 
         // Use the optimized getCurrentUser function to get fresh user data
         const currentUser = await getCurrentUser()
 
         if (currentUser) {
-          console.log("ClientLayout: User found:", {
+          console.log("ClientLayout: User found during initialization:", {
             email: currentUser.email,
             confirmed: !!currentUser.email_confirmed_at,
             provider: currentUser.app_metadata?.provider,
@@ -136,88 +143,86 @@ export default function ClientLayout({ children }: ClientLayoutProps): JSX.Eleme
 
           setUser(currentUser)
         } else {
-          console.log("ClientLayout: No active user")
+          console.log("ClientLayout: No active user during initialization")
           setUser(null)
         }
       } catch (err) {
-        console.error("ClientLayout: Auth check error:", err)
+        console.error("ClientLayout: Auth initialization error:", err)
         setUser(null)
       } finally {
-        // Clear timeout and set loading to false
-        if (loadingTimeoutRef.current) {
-          clearTimeout(loadingTimeoutRef.current)
-          loadingTimeoutRef.current = null
-        }
-        console.log("ClientLayout: Setting loading to false")
+        console.log("ClientLayout: Auth initialization complete")
+        setAuthInitialized(true)
         setLoading(false)
       }
     }
 
-    // Only run auth check once per mount, not on every navigation
-    if (!authCheckRef.current) {
-      authCheckRef.current = true
-      checkAuth()
-    } else {
-      // If auth check already ran, just ensure loading is false
-      setLoading(false)
+    // Only run once when the component first mounts
+    if (!authInitialized) {
+      initializeAuth()
+    }
+  }, [authInitialized]) // Only depend on authInitialized
+
+  // Handle redirects ONLY after auth is initialized
+  useEffect(() => {
+    if (!authInitialized || loading) return
+
+    console.log("ClientLayout: Checking redirects...", { 
+      user: user ? 'present' : 'null', 
+      isPublicPage, 
+      pathname 
+    })
+
+    // Redirect unauthenticated users from protected pages
+    if (!user && !isPublicPage) {
+      console.log("ClientLayout: Redirecting unauthenticated user to login")
+      router.push("/login")
+      return
     }
 
-    // Cleanup timeout on unmount
-    return () => {
-      if (loadingTimeoutRef.current) {
-        clearTimeout(loadingTimeoutRef.current)
-      }
+    // Redirect authenticated users from login page
+    if (user && pathname === "/login") {
+      console.log("ClientLayout: Redirecting authenticated user to home")
+      router.push("/")
+      return
     }
-  }, []) // Empty dependency array - only run once
+  }, [user?.id, authInitialized, loading, isPublicPage, pathname, router])
 
-  // Handle redirects after auth state is determined - with debouncing
+  // Auth state change listener - optimized with change detection
   useEffect(() => {
-    if (loading) return
-
-    // Use a small delay to prevent rapid redirects
-    const redirectTimer = setTimeout(() => {
-      // Redirect unauthenticated users from protected pages
-      if (!user && !isPublicPage) {
-        console.log("ClientLayout: Redirecting unauthenticated user to login")
-        router.push("/login")
-        return
-      }
-
-      // Redirect authenticated users from login page
-      if (user && pathname === "/login") {
-        console.log("ClientLayout: Redirecting authenticated user to home")
-        router.push("/")
-        return
-      }
-    }, 100)
-
-    return () => clearTimeout(redirectTimer)
-  }, [user?.id, loading, isPublicPage, pathname, router])
-
-  // Auth state change listener with cleanup - simplified
-  useEffect(() => {
+    console.log("ClientLayout: Setting up auth state listener...")
+    
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, session) => {
       console.log("ClientLayout: Auth state change:", event)
 
       if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED") {
-        // Get fresh user data to ensure we have the latest verification status
-        const currentUser = await getCurrentUser()
-        setUser(currentUser)
-        
-        // Ensure loading is false after getting user data
-        if (currentUser) {
-          setLoading(false)
+        if (session?.user) {
+          // Only update if user actually changed
+          const userChanged = !user || session.user.id !== user.id
+          
+          if (userChanged) {
+            console.log("ClientLayout: Updating user from auth state change")
+            setUser(session.user)
+          }
+          
+          // If we weren't initialized yet, mark as initialized
+          if (!authInitialized) {
+            setAuthInitialized(true)
+            setLoading(false)
+          }
         }
       } else if (event === "SIGNED_OUT") {
+        console.log("ClientLayout: User signed out, clearing state")
         setUser(null)
-        setLoading(false)
       }
     })
 
-    return () => subscription.unsubscribe()
-  }, [])
+    return () => {
+      console.log("ClientLayout: Cleaning up auth state listener")
+      subscription.unsubscribe()
+    }
+  }, [authInitialized, user?.id]) // Include user.id to detect changes
 
   // Mobile menu click outside handler
   useEffect(() => {
@@ -273,9 +278,9 @@ export default function ClientLayout({ children }: ClientLayoutProps): JSX.Eleme
     setMobileMenuOpen(!mobileMenuOpen)
   }
 
-  // Loading state for protected pages - with additional logging
-  if (loading && !isPublicPage) {
-    console.log("ClientLayout: Showing loading spinner for protected page")
+  // Loading state - only show while initializing auth with delay
+  if ((loading || !authInitialized) && showLoadingSpinner) {
+    console.log("ClientLayout: Showing loading spinner - auth not initialized")
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100">
         <div className="text-center">
@@ -283,7 +288,7 @@ export default function ClientLayout({ children }: ClientLayoutProps): JSX.Eleme
           <p className="mt-4 text-slate-600">Loading...</p>
           {process.env.NODE_ENV === "development" && (
             <div className="mt-2 text-xs text-slate-500">
-              Debug: loading={loading.toString()}, user={user ? 'present' : 'null'}, isPublicPage={isPublicPage.toString()}
+              Debug: loading={loading.toString()}, authInitialized={authInitialized.toString()}, user={user ? 'present' : 'null'}
             </div>
           )}
         </div>
@@ -293,12 +298,13 @@ export default function ClientLayout({ children }: ClientLayoutProps): JSX.Eleme
 
   // Render public pages without layout
   if (isPublicPage) {
+    console.log("ClientLayout: Rendering public page without layout")
     return <>{children}</>
   }
 
   // Prevent flash of protected content for unauthenticated users
   if (!user) {
-    console.log("ClientLayout: No user, showing nothing")
+    console.log("ClientLayout: No user for protected page, showing nothing")
     return null
   }
 
@@ -371,7 +377,7 @@ export default function ClientLayout({ children }: ClientLayoutProps): JSX.Eleme
                 <br />
                 Has Access: {userHasAccess ? "Yes" : "No"}
                 <br />
-                Loading: {loading ? "Yes" : "No"}
+                Auth Initialized: {authInitialized ? "Yes" : "No"}
                 <br />
                 Timestamp: {new Date().toISOString()}
               </div>
@@ -400,11 +406,13 @@ export default function ClientLayout({ children }: ClientLayoutProps): JSX.Eleme
         <div className="container mx-auto px-6 py-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <img
-                src="/chdlscriptlogoxBigNERD-horizontal-blacktext.png"
-                alt="Carter Hales x BIGNERD"
-                className="h-6 md:h-8 w-auto"
-              />
+              <Link href="/">
+                <img
+                  src="/chdlscriptlogoxBigNERD-horizontal-blacktext.png"
+                  alt="Carter Hales x BIGNERD"
+                  className="h-6 md:h-8 w-auto cursor-pointer"
+                />
+              </Link>
             </div>
 
             {/* Mobile menu button */}
@@ -426,13 +434,13 @@ export default function ClientLayout({ children }: ClientLayoutProps): JSX.Eleme
             {/* Desktop navigation */}
             <div className="hidden md:flex items-center gap-6 text-sm">
               {navLinks.map(({ href, label }: NavLink) => (
-                <a 
+                <Link 
                   key={href} 
                   href={href} 
                   className="text-slate-600 hover:text-slate-900 transition-colors"
                 >
                   {label}
-                </a>
+                </Link>
               ))}
 
               {/* User info and logout button */}
@@ -462,14 +470,14 @@ export default function ClientLayout({ children }: ClientLayoutProps): JSX.Eleme
           >
             <div className="py-4 space-y-3 border-t border-slate-200 mt-3">
               {navLinks.map(({ href, label }: NavLink) => (
-                <a
+                <Link
                   key={href}
                   href={href}
                   className="block text-slate-600 hover:text-slate-900 transition-colors py-2"
                   onClick={() => setMobileMenuOpen(false)}
                 >
                   {label}
-                </a>
+                </Link>
               ))}
 
               {/* Mobile user info and logout */}
