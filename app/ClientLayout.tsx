@@ -7,7 +7,7 @@ import type { User } from "@supabase/supabase-js"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Mail, AlertCircle } from "lucide-react"
+import { Mail, AlertCircle, LogOut, UserIcon } from "lucide-react"
 import { resendConfirmation } from "@/lib/auth"
 
 interface ClientLayoutProps {
@@ -145,6 +145,7 @@ export default function ClientLayout({ children }: ClientLayoutProps) {
   }
 
   const handleSignOut = async () => {
+    console.log("Signing out user...")
     await supabase.auth.signOut()
     // Clear bypass on sign out
     setBypassVerification(false)
@@ -313,6 +314,22 @@ export default function ClientLayout({ children }: ClientLayoutProps) {
               <a href="/recommendations" className="text-slate-600 hover:text-slate-900 transition-colors">
                 Recommendations
               </a>
+
+              {/* User info and logout button */}
+              <div className="flex items-center gap-3 ml-4 pl-4 border-l border-slate-200">
+                <div className="flex items-center gap-2 text-slate-600">
+                  <UserIcon className="h-4 w-4" />
+                  <span className="text-xs">{user.email}</span>
+                </div>
+                <Button
+                  onClick={handleSignOut}
+                  variant="ghost"
+                  size="sm"
+                  className="text-slate-600 hover:text-slate-900 h-8 px-2"
+                >
+                  <LogOut className="h-4 w-4" />
+                </Button>
+              </div>
             </div>
           </div>
 
@@ -356,6 +373,23 @@ export default function ClientLayout({ children }: ClientLayoutProps) {
               >
                 Recommendations
               </a>
+
+              {/* Mobile user info and logout */}
+              <div className="pt-3 border-t border-slate-200">
+                <div className="flex items-center gap-2 text-slate-600 py-2">
+                  <UserIcon className="h-4 w-4" />
+                  <span className="text-xs">{user.email}</span>
+                </div>
+                <Button
+                  onClick={handleSignOut}
+                  variant="ghost"
+                  size="sm"
+                  className="text-slate-600 hover:text-slate-900 w-full justify-start"
+                >
+                  <LogOut className="h-4 w-4 mr-2" />
+                  Sign Out
+                </Button>
+              </div>
             </div>
           </div>
         </div>
