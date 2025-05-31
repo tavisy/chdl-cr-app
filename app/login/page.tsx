@@ -1,5 +1,5 @@
 "use client"
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import type React from "react"
 import { useRouter } from "next/navigation"
 import { 
@@ -7,7 +7,6 @@ import {
   signUpWithEmail, 
   signInWithGoogle, 
   resendConfirmation,
-  getCurrentUser,
   hasVerifiedAccess,
   needsEmailVerification
 } from "@/lib/auth"
@@ -67,7 +66,19 @@ export default function LoginPage(): JSX.Element {
   const [pendingEmail, setPendingEmail] = useState<string>("")
   const [showDebug, setShowDebug] = useState<boolean>(false)
   const [debugInfo, setDebugInfo] = useState<DebugInfo>({})
+  const [currentUser, setCurrentUser] = useState<User | null>(null)
   const router = useRouter()
+
+  // Memoized access check to prevent excessive logging
+  const userHasAccess = useMemo(() => {
+    if (!currentUser) return false
+    return hasVerifiedAccess(currentUser)
+  }, [currentUser?.id, currentUser?.email_confirmed_at, currentUser?.app_metadata?.provider])
+
+  const userNeedsVerification = useMemo(() => {
+    if (!currentUser) return false
+    return needsEmailVerification(currentUser)
+  }, [currentUser?.id, currentUser?.email_confirmed_at, currentUser?.app_metadata?.provider])
 
   useEffect(() => {
     // Check if user is already logged in
@@ -86,39 +97,48 @@ export default function LoginPage(): JSX.Element {
           return
         }
 
-        const currentUser = session?.user || null
+        const user = session?.user || null
+        setCurrentUser(user)
 
-        setDebugInfo((prev) => ({
-          ...prev,
-          hasSession: !!session,
-          userEmail: currentUser?.email,
-          emailConfirmed: currentUser?.email_confirmed_at,
-          provider: currentUser?.app_metadata?.provider,
-          hasAccess: currentUser ? hasVerifiedAccess(currentUser) : false
-        }))
+        if (user) {
+          setDebugInfo((prev) => ({
+            ...prev,
+            hasSession: !!session,
+            userEmail: user.email,
+            emailConfirmed: user.email_confirmed_at,
+            provider: user.app_metadata?.provider,
+            hasAccess: hasVerifiedAccess(user)
+          }))
 
-        if (currentUser) {
           console.log("Login page: Found existing session:", {
-            email: currentUser.email,
-            confirmed: currentUser.email_confirmed_at,
-            provider: currentUser.app_metadata?.provider,
-            hasAccess: hasVerifiedAccess(currentUser)
+            email: user.email,
+            confirmed: user.email_confirmed_at,
+            provider: user.app_metadata?.provider,
+            hasAccess: hasVerifiedAccess(user)
           })
 
           // Check if user has verified access
-          if (hasVerifiedAccess(currentUser)) {
+          if (hasVerifiedAccess(user)) {
             console.log("Login page: User has verified access, redirecting to home")
             router.push("/")
-          } else if (needsEmailVerification(currentUser)) {
+          } else if (needsEmailVerification(user)) {
             console.log("Login page: User exists but needs email verification")
             setShowResendButton(true)
-            setPendingEmail(currentUser.email || "")
+            setPendingEmail(user.email || "")
             setMessage(
               "Your email address needs to be verified. Please check your inbox or resend the confirmation email.",
             )
           }
         } else {
           console.log("Login page: No active session found (normal for login page)")
+          setDebugInfo((prev) => ({
+            ...prev,
+            hasSession: false,
+            userEmail: undefined,
+            emailConfirmed: null,
+            provider: undefined,
+            hasAccess: false
+          }))
         }
       } catch (err) {
         console.error("Login page: Error checking auth state:", err)
@@ -177,6 +197,9 @@ export default function LoginPage(): JSX.Element {
           provider: data.user.app_metadata?.provider,
           id: data.user.id,
         })
+
+        // Update current user state
+        setCurrentUser(data.user)
 
         // Use the helper functions to check access
         const userHasAccess = hasVerifiedAccess(data.user)
@@ -358,6 +381,7 @@ export default function LoginPage(): JSX.Element {
                       onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEmail(e.target.value)}
                       required
                       disabled={loading}
+                      autoComplete="email"
                     />
                   </div>
                   <div className="space-y-2">
@@ -370,6 +394,7 @@ export default function LoginPage(): JSX.Element {
                       onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPassword(e.target.value)}
                       required
                       disabled={loading}
+                      autoComplete="current-password"
                     />
                   </div>
                   <Button type="submit" className="w-full" disabled={loading}>
@@ -389,6 +414,7 @@ export default function LoginPage(): JSX.Element {
                       value={fullName}
                       onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFullName(e.target.value)}
                       disabled={loading}
+                      autoComplete="name"
                     />
                   </div>
                   <div className="space-y-2">
@@ -401,6 +427,7 @@ export default function LoginPage(): JSX.Element {
                       onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEmail(e.target.value)}
                       required
                       disabled={loading}
+                      autoComplete="email"
                     />
                   </div>
                   <div className="space-y-2">
@@ -414,6 +441,7 @@ export default function LoginPage(): JSX.Element {
                       required
                       minLength={6}
                       disabled={loading}
+                      autoComplete="new-password"
                     />
                   </div>
                   <Button type="submit" className="w-full" disabled={loading}>
@@ -544,7 +572,9 @@ export default function LoginPage(): JSX.Element {
                       userEmail: debugInfo.userEmail,
                       emailConfirmed: debugInfo.emailConfirmed,
                       provider: debugInfo.provider,
-                      hasAccess: debugInfo.hasAccess
+                      hasAccess: debugInfo.hasAccess,
+                      userHasAccess: userHasAccess,
+                      userNeedsVerification: userNeedsVerification
                     }, null, 2)}</pre>
                   </div>
                   {debugInfo.signInAttempt && (

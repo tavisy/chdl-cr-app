@@ -1,5 +1,5 @@
 "use client"
-import { useEffect, useState, useCallback, useRef } from "react"
+import { useEffect, useState, useCallback, useRef, useMemo } from "react"
 import type React from "react"
 import { useRouter, usePathname } from "next/navigation"
 import { supabase } from "@/lib/supabase"
@@ -82,10 +82,13 @@ export default function ClientLayout({ children }: ClientLayoutProps): JSX.Eleme
   const publicPages: string[] = ["/login", "/auth/callback", "/auth/verify"]
   const isPublicPage: boolean = publicPages.includes(pathname)
 
-  // Memoized access check function using the optimized helper
-  const checkUserAccess = useCallback((user: User | null): boolean => {
+  // Memoized access check that only recalculates when user changes
+  const userHasAccess = useMemo(() => {
+    if (!user) return false
+    
     const hasAccess = hasVerifiedAccess(user)
     
+    // Only log once when user or access status changes
     console.log("ClientLayout: User access check:", {
       email: user?.email,
       provider: user?.app_metadata?.provider,
@@ -94,7 +97,7 @@ export default function ClientLayout({ children }: ClientLayoutProps): JSX.Eleme
     })
     
     return hasAccess
-  }, [])
+  }, [user?.id, user?.email_confirmed_at, user?.app_metadata?.provider]) // Only depend on relevant user properties
 
   // Initial authentication check
   useEffect(() => {
@@ -131,24 +134,29 @@ export default function ClientLayout({ children }: ClientLayoutProps): JSX.Eleme
     checkAuth()
   }, [])
 
-  // Handle redirects after auth state is determined
+  // Handle redirects after auth state is determined - with debouncing
   useEffect(() => {
     if (loading) return
 
-    // Redirect unauthenticated users from protected pages
-    if (!user && !isPublicPage) {
-      console.log("ClientLayout: Redirecting unauthenticated user to login")
-      router.push("/login")
-      return
-    }
+    // Use a small delay to prevent rapid redirects
+    const redirectTimer = setTimeout(() => {
+      // Redirect unauthenticated users from protected pages
+      if (!user && !isPublicPage) {
+        console.log("ClientLayout: Redirecting unauthenticated user to login")
+        router.push("/login")
+        return
+      }
 
-    // Redirect authenticated users from login page
-    if (user && pathname === "/login") {
-      console.log("ClientLayout: Redirecting authenticated user to home")
-      router.push("/")
-      return
-    }
-  }, [user, loading, isPublicPage, pathname, router])
+      // Redirect authenticated users from login page
+      if (user && pathname === "/login") {
+        console.log("ClientLayout: Redirecting authenticated user to home")
+        router.push("/")
+        return
+      }
+    }, 100)
+
+    return () => clearTimeout(redirectTimer)
+  }, [user?.id, loading, isPublicPage, pathname, router]) // Only depend on user.id, not entire user object
 
   // Auth state change listener with cleanup
   useEffect(() => {
@@ -242,11 +250,8 @@ export default function ClientLayout({ children }: ClientLayoutProps): JSX.Eleme
     return null
   }
 
-  // Check access permissions using the optimized function
-  const hasAccess = checkUserAccess(user)
-
   // Email verification screen for users who need verification
-  if (!hasAccess) {
+  if (!userHasAccess) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100 p-4">
         <Card className="w-full max-w-md">
@@ -311,7 +316,9 @@ export default function ClientLayout({ children }: ClientLayoutProps): JSX.Eleme
                 <br />
                 Provider: {user.app_metadata?.provider || "email"}
                 <br />
-                Has Access: {hasAccess ? "Yes" : "No"}
+                Has Access: {userHasAccess ? "Yes" : "No"}
+                <br />
+                Timestamp: {new Date().toISOString()}
               </div>
             )}
           </CardContent>
