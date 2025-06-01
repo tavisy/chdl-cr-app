@@ -66,11 +66,14 @@ export default function AdminDashboard() {
         console.log("Current user:", currentUser.email)
         setUser(currentUser)
 
-        // Check if user is admin
+        // Fixed admin check - more comprehensive
         const isAdmin =
           currentUser.email?.includes("@carterhales") ||
           currentUser.email?.includes("@bignerd") ||
-          currentUser.email?.includes("admin")
+          currentUser.email?.includes("admin") ||
+          currentUser.email?.includes("tavis@") ||
+          currentUser.email === "tav@bignerdlsolutions.com" ||
+          currentUser.email === "tavis@gmail.com"
 
         console.log("Is admin:", isAdmin, "Email:", currentUser.email)
 
@@ -119,36 +122,151 @@ export default function AdminDashboard() {
           break
       }
 
-      console.log("Fetching users...")
-      // Fetch users
-      const { data: usersData, error: usersError } = await supabase
-        .from("profiles")
-        .select("*")
-        .order("created_at", { ascending: false })
+      console.log("Fetching ALL access logs as admin...")
+      
+      // Try using admin RPC function first
+      let allLogsData = []
+      try {
+        const { data: rpcLogsData, error: rpcLogsError } = await supabase
+          .rpc('get_all_access_logs_admin', { 
+            days_back: timeRange === "24h" ? 1 : timeRange === "7d" ? 7 : timeRange === "30d" ? 30 : 90 
+          })
 
-      if (usersError) {
-        console.error("Error fetching users:", usersError)
-      } else {
-        console.log("Users fetched:", usersData?.length || 0)
-        setUsers(usersData || [])
+        if (rpcLogsError) {
+          console.error("RPC access logs error:", rpcLogsError)
+        } else if (rpcLogsData) {
+          console.log("Access logs via RPC:", rpcLogsData.length)
+          allLogsData = rpcLogsData
+        }
+      } catch (rpcError) {
+        console.error("RPC function not available:", rpcError)
       }
 
-      console.log("Fetching access logs...")
-      // Fetch access logs within time range
-      const { data: logsData, error: logsError } = await supabase
-        .from("access_logs")
-        .select("*")
-        .gte("accessed_at", startDate.toISOString())
-        .order("accessed_at", { ascending: false })
+      // Fallback to direct table access
+      if (!allLogsData || allLogsData.length === 0) {
+        console.log("Trying direct access logs query...")
+        const { data: directLogsData, error: directLogsError } = await supabase
+          .from("access_logs")
+          .select("*")
+          .gte("accessed_at", startDate.toISOString())
+          .order("accessed_at", { ascending: false })
 
-      if (logsError) {
-        console.error("Error fetching access logs:", logsError)
-      } else {
-        console.log("Access logs fetched:", logsData?.length || 0)
-        setAccessLogs(logsData || [])
+        if (directLogsError) {
+          console.error("Direct access logs error:", directLogsError)
+          console.error("RLS might be blocking admin access to logs")
+        } else {
+          console.log("Access logs via direct query:", directLogsData?.length || 0)
+          allLogsData = directLogsData || []
+        }
       }
+
+      setAccessLogs(allLogsData)
+
+      console.log("Fetching ALL users from profiles...")
+      
+      // Try using admin RPC function first
+      let usersData = []
+      try {
+        const { data: rpcUsersData, error: rpcUsersError } = await supabase
+          .rpc('get_all_users_admin')
+
+        if (rpcUsersError) {
+          console.error("RPC users error:", rpcUsersError)
+        } else if (rpcUsersData && rpcUsersData.length > 0) {
+          console.log("Users via RPC:", rpcUsersData.length)
+          usersData = rpcUsersData
+        }
+      } catch (rpcError) {
+        console.error("RPC function not available:", rpcError)
+      }
+
+      // Fallback to direct table access
+      if (!usersData || usersData.length === 0) {
+        console.log("Trying direct profiles query...")
+        const { data: directProfilesData, error: directProfilesError } = await supabase
+          .from("profiles")
+          .select("*")
+          .order("created_at", { ascending: false })
+
+        if (directProfilesError) {
+          console.error("Direct profiles error:", directProfilesError)
+          console.error("RLS might be blocking admin access to profiles")
+        } else if (directProfilesData && directProfilesData.length > 0) {
+          console.log("Users via direct query:", directProfilesData.length)
+          usersData = directProfilesData
+        }
+      }
+
+      // If profiles are empty or limited, try to get user data from access logs
+      if (!usersData || usersData.length === 0 || (allLogsData && usersData.length < new Set(allLogsData.map(log => log.user_id)).size)) {
+        console.log("Profiles incomplete, creating comprehensive user data from access logs...")
+        
+        if (allLogsData && allLogsData.length > 0) {
+          // Group access logs by user_id to create user profiles
+          const userMap = new Map()
+          
+          allLogsData.forEach(log => {
+            if (!userMap.has(log.user_id)) {
+              userMap.set(log.user_id, {
+                id: log.user_id,
+                email: `User ${log.user_id.substring(0, 8)}...`,
+                full_name: null,
+                created_at: log.accessed_at,
+                updated_at: log.accessed_at,
+                last_login_at: log.accessed_at,
+                login_count: 1,
+                is_admin: false,
+                role: 'user',
+                is_active: true,
+                avatar_url: null
+              })
+            } else {
+              const existing = userMap.get(log.user_id)
+              existing.login_count += 1
+              if (new Date(log.accessed_at) > new Date(existing.last_login_at)) {
+                existing.last_login_at = log.accessed_at
+              }
+              if (new Date(log.accessed_at) < new Date(existing.created_at)) {
+                existing.created_at = log.accessed_at
+              }
+            }
+          })
+
+          const usersFromLogs = Array.from(userMap.values())
+          console.log("Users created from access logs:", usersFromLogs.length)
+          
+          // Merge with existing profiles data if any
+          if (usersData && usersData.length > 0) {
+            // Update existing profiles with access log data
+            usersData = usersData.map(profile => {
+              const logUser = userMap.get(profile.id)
+              if (logUser) {
+                return {
+                  ...profile,
+                  login_count: logUser.login_count,
+                  last_login_at: logUser.last_login_at
+                }
+              }
+              return profile
+            })
+            
+            // Add any users from logs that aren't in profiles
+            usersFromLogs.forEach(logUser => {
+              if (!usersData.find(p => p.id === logUser.id)) {
+                usersData.push(logUser)
+              }
+            })
+          } else {
+            usersData = usersFromLogs
+          }
+        }
+      }
+
+      console.log("Final users data:", usersData?.length || 0)
+      setUsers(usersData || [])
 
       // Calculate statistics
+      const logsData = allLogsData || []
       if (usersData && logsData) {
         const uniqueVisitors = new Set(logsData.map((log) => log.user_id)).size
         const googleLogins = logsData.filter((log) => log.login_method === "google").length
@@ -166,6 +284,8 @@ export default function AdminDashboard() {
           totalUsers: usersData.length,
           totalLogins: logsData.length,
           uniqueVisitors,
+          googleLogins,
+          emailLogins,
         })
       }
 
@@ -250,7 +370,7 @@ export default function AdminDashboard() {
   // Get user email from user_id by looking up in users array
   const getUserEmail = (userId) => {
     const user = users.find((u) => u.id === userId)
-    return user?.email || "Unknown"
+    return user?.email || `User ${userId?.substring(0, 8)}...` || "Unknown"
   }
 
   // Show loading state
@@ -287,7 +407,7 @@ export default function AdminDashboard() {
             <div className="text-center space-y-2">
               <p className="text-sm text-slate-600">Current user: {user?.email || "Not logged in"}</p>
               <p className="text-xs text-slate-500">
-                Admin access requires an email containing @carterhales, @bignerd, or admin
+                Admin access requires an authorized email address
               </p>
             </div>
 
@@ -313,6 +433,31 @@ export default function AdminDashboard() {
           <p className="text-slate-600">Welcome, {user?.email}</p>
         </div>
       </div>
+
+      {/* Debug Info for Development */}
+      {process.env.NODE_ENV === "development" && (
+        <Card className="mb-6 border-blue-200 bg-blue-50">
+          <CardHeader>
+            <CardTitle className="text-blue-800">Debug Information</CardTitle>
+          </CardHeader>
+          <CardContent className="text-sm">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <strong>Users Table Records:</strong> {users.length}
+              </div>
+              <div>
+                <strong>Access Logs Records:</strong> {accessLogs.length}
+              </div>
+              <div>
+                <strong>Time Range:</strong> {timeRange}
+              </div>
+              <div>
+                <strong>Unique Log Users:</strong> {new Set(accessLogs.map(log => log.user_id)).size}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Time range selector */}
       <div className="flex flex-wrap gap-2 mb-6">
