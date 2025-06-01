@@ -68,17 +68,19 @@ export default function LoginPage(): JSX.Element {
   const [debugInfo, setDebugInfo] = useState<DebugInfo>({})
   const [currentUser, setCurrentUser] = useState<User | null>(null)
   const router = useRouter()
+  const [showForgotPassword, setShowForgotPassword] = useState<boolean>(false)
+  const [forgotPasswordEmail, setForgotPasswordEmail] = useState<string>("")
 
   // Memoized access check to prevent excessive logging
   const userHasAccess = useMemo(() => {
     if (!currentUser) return false
     return hasVerifiedAccess(currentUser)
-  }, [currentUser?.id, currentUser])
+  }, [currentUser])
 
   const userNeedsVerification = useMemo(() => {
     if (!currentUser) return false
     return needsEmailVerification(currentUser)
-  }, [currentUser?.id, currentUser?.email_confirmed_at, currentUser?.app_metadata?.provider])
+  }, [currentUser])
 
   useEffect(() => {
     // Check if user is already logged in
@@ -335,6 +337,36 @@ export default function LoginPage(): JSX.Element {
     }
   }
 
+  const handleForgotPassword = async (e: React.FormEvent<HTMLFormElement>): Promise<void> => {
+    e.preventDefault()
+    setLoading(true)
+    setError("")
+    setMessage("")
+
+    console.log("Attempting password reset for:", forgotPasswordEmail)
+
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(forgotPasswordEmail, {
+        redirectTo: `${window.location.origin}/auth/callback?type=recovery`,
+      })
+
+      if (error) {
+        console.error("Password reset error:", error)
+        setError(error.message)
+      } else {
+        console.log("Password reset email sent successfully")
+        setMessage("Password reset email sent! Please check your inbox and follow the instructions.")
+        setShowForgotPassword(false)
+        setForgotPasswordEmail("")
+      }
+    } catch (err) {
+      console.error("Password reset exception:", err)
+      setError("Failed to send password reset email. Please try again.")
+    } finally {
+      setLoading(false)
+    }
+  }
+
   const toggleDebug = (): void => {
     setShowDebug(!showDebug)
   }
@@ -347,6 +379,8 @@ export default function LoginPage(): JSX.Element {
     setMessage("")
     setShowResendButton(false)
     setPendingEmail("")
+    setShowForgotPassword(false)
+    setForgotPasswordEmail("")
   }
 
   return (
@@ -400,6 +434,17 @@ export default function LoginPage(): JSX.Element {
                   <Button type="submit" className="w-full" disabled={loading}>
                     {loading ? "Signing in..." : "Sign In"}
                   </Button>
+                  <div className="text-center mt-2">
+                    <Button
+                      variant="link"
+                      size="sm"
+                      onClick={() => setShowForgotPassword(true)}
+                      className="text-xs text-muted-foreground"
+                      type="button"
+                    >
+                      Forgot your password?
+                    </Button>
+                  </div>
                 </form>
               </TabsContent>
 
@@ -450,6 +495,47 @@ export default function LoginPage(): JSX.Element {
                 </form>
               </TabsContent>
             </Tabs>
+
+            {/* Forgot Password Form */}
+            {showForgotPassword && (
+              <div className="mt-6 p-4 bg-gray-50 border border-gray-200 rounded-lg">
+                <h4 className="text-sm font-semibold text-gray-900 mb-3">Reset Password</h4>
+                <form onSubmit={handleForgotPassword} className="space-y-3">
+                  <div className="space-y-2">
+                    <Label htmlFor="forgot-email">Email</Label>
+                    <Input
+                      id="forgot-email"
+                      type="email"
+                      placeholder="Enter your email address"
+                      value={forgotPasswordEmail}
+                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForgotPasswordEmail(e.target.value)}
+                      required
+                      disabled={loading}
+                      autoComplete="email"
+                    />
+                  </div>
+                  <div className="flex gap-2">
+                    <Button type="submit" size="sm" disabled={loading} className="flex-1">
+                      {loading ? "Sending..." : "Send Reset Email"}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setShowForgotPassword(false)
+                        setForgotPasswordEmail("")
+                        setError("")
+                        setMessage("")
+                      }}
+                      disabled={loading}
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                </form>
+              </div>
+            )}
 
             <div className="mt-6">
               <div className="relative">

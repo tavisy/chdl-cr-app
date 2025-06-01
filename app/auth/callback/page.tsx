@@ -6,9 +6,8 @@ import { logAccess, getCurrentUser, hasVerifiedAccess } from "@/lib/auth"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { CheckCircle, AlertCircle, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import type { User } from "@supabase/supabase-js"
 
-type AuthStatus = "loading" | "success" | "error"
+type AuthStatus = "loading" | "success" | "error" | "recovery"
 
 interface DebugInfo {
   error?: string
@@ -20,6 +19,8 @@ interface DebugInfo {
   hasCode?: boolean
   hasState?: boolean
   provider?: string | null
+  type?: string | null
+  isRecovery?: boolean
   userVerificationStatus?: {
     email?: string
     emailConfirmed?: string | null
@@ -60,7 +61,7 @@ export default function AuthCallback(): JSX.Element {
         // Initialize debug info
         const debug: DebugInfo = {
           step: "starting",
-          timestamp: new Date().toISOString()
+          timestamp: new Date().toISOString(),
         }
 
         // Parse URL parameters
@@ -74,6 +75,15 @@ export default function AuthCallback(): JSX.Element {
         console.log("AuthCallback: URL params:", debug.urlParams)
         console.log("AuthCallback: Hash params:", debug.hashParams)
 
+        // Check for recovery type parameter
+        const type = urlParams.get("type") || hashParams.get("type")
+        const isRecovery = type === "recovery"
+
+        debug.type = type
+        debug.isRecovery = isRecovery
+
+        console.log("AuthCallback: Auth type:", type, "Is recovery:", isRecovery)
+
         // Check for error parameters first
         const error = urlParams.get("error") || hashParams.get("error")
         const errorDescription = urlParams.get("error_description") || hashParams.get("error_description")
@@ -83,12 +93,84 @@ export default function AuthCallback(): JSX.Element {
           debug.error = error
           debug.errorDescription = errorDescription
           debug.step = "url_error"
-          
+
           clearTimeout(timeoutRef.current!)
           setStatus("error")
           setMessage(errorDescription || error)
           setDebugInfo(debug)
           return
+        }
+
+        // Handle password recovery flow
+        if (isRecovery) {
+          console.log("AuthCallback: Processing password recovery flow...")
+          debug.step = "recovery_flow"
+
+          const code = urlParams.get("code")
+
+          if (!code) {
+            console.error("AuthCallback: Recovery flow but no code provided")
+            debug.step = "recovery_no_code"
+
+            clearTimeout(timeoutRef.current!)
+            setStatus("error")
+            setMessage("Invalid recovery link. Please request a new password reset.")
+            setDebugInfo(debug)
+            return
+          }
+
+          try {
+            const { data, error: exchangeError } = await supabase.auth.exchangeCodeForSession(code)
+
+            if (exchangeError) {
+              console.error("AuthCallback: Recovery code exchange error:", exchangeError)
+              debug.exchangeError = exchangeError
+              debug.step = "recovery_exchange_error"
+
+              clearTimeout(timeoutRef.current!)
+              setStatus("error")
+              setMessage("Invalid or expired recovery link. Please request a new password reset.")
+              setDebugInfo(debug)
+              return
+            }
+
+            if (data.session && data.user) {
+              console.log("AuthCallback: Recovery successful for user:", data.user.email)
+              debug.step = "recovery_success"
+
+              clearTimeout(timeoutRef.current!)
+              setStatus("recovery")
+              setMessage("Password recovery successful! You can now set a new password.")
+              setDebugInfo(debug)
+
+              // Redirect to a password reset form or show success message
+              setTimeout(() => {
+                // You might want to redirect to a dedicated password reset page
+                // For now, we'll redirect to the main app since the user is authenticated
+                router.push("/?password_reset=true")
+              }, 3000)
+              return
+            } else {
+              console.error("AuthCallback: Recovery exchange succeeded but no session/user returned")
+              debug.step = "recovery_no_session"
+
+              clearTimeout(timeoutRef.current!)
+              setStatus("error")
+              setMessage("Recovery process incomplete. Please try requesting a new password reset.")
+              setDebugInfo(debug)
+              return
+            }
+          } catch (recoveryError) {
+            console.error("AuthCallback: Error in recovery flow:", recoveryError)
+            debug.exchangeError = recoveryError
+            debug.step = "recovery_exception"
+
+            clearTimeout(timeoutRef.current!)
+            setStatus("error")
+            setMessage("Error processing password recovery. Please try again.")
+            setDebugInfo(debug)
+            return
+          }
         }
 
         // Check for code parameter (PKCE flow - both OAuth and email verification)
@@ -97,7 +179,7 @@ export default function AuthCallback(): JSX.Element {
         if (!code) {
           console.log("AuthCallback: No code parameter found, checking for existing session...")
           debug.step = "no_code_check_session"
-          
+
           // Check if we already have a session
           const { data: sessionData } = await supabase.auth.getSession()
 
@@ -111,7 +193,7 @@ export default function AuthCallback(): JSX.Element {
               email: user.email,
               emailConfirmed: user.email_confirmed_at,
               provider: user.app_metadata?.provider,
-              hasAccess
+              hasAccess,
             }
             debug.step = "existing_session_found"
 
@@ -122,13 +204,13 @@ export default function AuthCallback(): JSX.Element {
             setStatus("success")
             setMessage("Successfully signed in! Redirecting...")
             setDebugInfo(debug)
-            
+
             setTimeout(() => router.push("/"), 2000)
             return
           } else {
             console.log("AuthCallback: No code and no session, redirecting to login")
             debug.step = "no_code_no_session"
-            
+
             clearTimeout(timeoutRef.current!)
             setStatus("error")
             setMessage("No authentication data found. Please try signing in again.")
@@ -149,7 +231,7 @@ export default function AuthCallback(): JSX.Element {
             console.error("AuthCallback: Code exchange error:", exchangeError)
             debug.exchangeError = exchangeError
             debug.step = "code_exchange_error"
-            
+
             clearTimeout(timeoutRef.current!)
             setStatus("error")
             setMessage("Authentication failed. Please try signing in again.")
@@ -160,14 +242,14 @@ export default function AuthCallback(): JSX.Element {
           if (data.session && data.user) {
             console.log("AuthCallback: Code exchange successful for user:", data.user.email)
             debug.step = "code_exchange_success"
-            
+
             // Get fresh user data to ensure we have the latest verification status
             const freshUser = await getCurrentUser()
-            
+
             if (!freshUser) {
               console.error("AuthCallback: Could not retrieve fresh user data")
               debug.step = "fresh_user_error"
-              
+
               clearTimeout(timeoutRef.current!)
               setStatus("error")
               setMessage("Authentication incomplete. Please try signing in again.")
@@ -177,12 +259,12 @@ export default function AuthCallback(): JSX.Element {
 
             // Check verification status
             const hasAccess = hasVerifiedAccess(freshUser)
-            
+
             debug.userVerificationStatus = {
               email: freshUser.email,
               emailConfirmed: freshUser.email_confirmed_at,
               provider: freshUser.app_metadata?.provider,
-              hasAccess
+              hasAccess,
             }
             debug.step = "verification_check_complete"
 
@@ -198,14 +280,14 @@ export default function AuthCallback(): JSX.Element {
             setStatus("success")
             setMessage("Authentication successful! Redirecting...")
             setDebugInfo(debug)
-            
+
             setTimeout(() => router.push("/"), 2000)
             return
           } else {
             console.error("AuthCallback: Code exchange succeeded but no session/user returned")
             debug.data = data
             debug.step = "code_exchange_no_user"
-            
+
             clearTimeout(timeoutRef.current!)
             setStatus("error")
             setMessage("Authentication process incomplete. Please try signing in again.")
@@ -216,21 +298,20 @@ export default function AuthCallback(): JSX.Element {
           console.error("AuthCallback: Error exchanging code:", exchangeError)
           debug.exchangeError = exchangeError
           debug.step = "code_exchange_exception"
-          
+
           clearTimeout(timeoutRef.current!)
           setStatus("error")
           setMessage("Error processing authentication. Please try again.")
           setDebugInfo(debug)
           return
         }
-        
       } catch (err) {
         console.error("AuthCallback: Unexpected error:", err)
-        
+
         if (timeoutRef.current) {
           clearTimeout(timeoutRef.current)
         }
-        
+
         setStatus("error")
         setMessage("An unexpected error occurred. Please try signing in again.")
         setDebugInfo({ err: String(err), step: "unexpected_error" })
@@ -270,6 +351,8 @@ export default function AuthCallback(): JSX.Element {
         return "Processing..."
       case "success":
         return "Success!"
+      case "recovery":
+        return "Password Recovery Complete!"
       case "error":
         return "Authentication Failed"
       default:
@@ -283,6 +366,8 @@ export default function AuthCallback(): JSX.Element {
         return "Processing your authentication..."
       case "success":
         return "Authentication completed successfully"
+      case "recovery":
+        return "Your password has been reset successfully"
       case "error":
         return "There was an issue with authentication"
       default:
@@ -299,12 +384,8 @@ export default function AuthCallback(): JSX.Element {
             alt="Carter Hales x BIGNERD"
             className="h-12 w-auto mx-auto mb-4"
           />
-          <CardTitle className="text-2xl font-bold">
-            {getStatusTitle()}
-          </CardTitle>
-          <CardDescription>
-            {getStatusDescription()}
-          </CardDescription>
+          <CardTitle className="text-2xl font-bold">{getStatusTitle()}</CardTitle>
+          <CardDescription>{getStatusDescription()}</CardDescription>
         </CardHeader>
         <CardContent className="text-center">
           {status === "loading" && (
@@ -338,6 +419,17 @@ export default function AuthCallback(): JSX.Element {
             </div>
           )}
 
+          {status === "recovery" && (
+            <div className="flex flex-col items-center space-y-4">
+              <CheckCircle className="h-16 w-16 text-green-600" />
+              <p className="text-slate-600">{message}</p>
+              <div className="w-full bg-gray-200 rounded-full h-2">
+                <div className="bg-green-600 h-2 rounded-full animate-pulse" style={{ width: "100%" }}></div>
+              </div>
+              <p className="text-sm text-slate-500">You are now logged in. Redirecting...</p>
+            </div>
+          )}
+
           {/* Debug information - only show in development */}
           {debugInfo && process.env.NODE_ENV === "development" && (
             <div className="mt-6 p-3 bg-gray-100 rounded text-xs text-left w-full overflow-auto max-h-60">
@@ -363,9 +455,7 @@ export default function AuthCallback(): JSX.Element {
                   <div>
                     <p className="font-semibold">Error:</p>
                     <p className="text-xs text-red-600">{debugInfo.error}</p>
-                    {debugInfo.errorDescription && (
-                      <p className="text-xs text-red-600">{debugInfo.errorDescription}</p>
-                    )}
+                    {debugInfo.errorDescription && <p className="text-xs text-red-600">{debugInfo.errorDescription}</p>}
                   </div>
                 )}
                 {debugInfo.exchangeError && (
