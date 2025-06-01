@@ -88,9 +88,29 @@ export default function AuthCallbackPage(): JSX.Element {
     }
   }, [])
 
-  // Optimized code exchange with better error handling
+  // Handle both PKCE and regular code exchange
   const exchangeCodeForSession = useCallback(async (code: string, isRecovery: boolean) => {
     try {
+      // For recovery flows, check if this is a PKCE token (starts with 'pkce_')
+      if (isRecovery && code.startsWith('pkce_')) {
+        console.log("AuthCallback: Detected PKCE recovery token, using session check instead")
+        
+        // For PKCE recovery, the user should already be signed in
+        // We just need to verify the session exists
+        const { data: sessionData, error: sessionError } = await supabase.auth.getSession()
+        
+        if (sessionError) {
+          throw new Error("Failed to retrieve recovery session. Please try again.")
+        }
+        
+        if (!sessionData.session?.user) {
+          throw new Error("Recovery session not found. Please request a new password reset.")
+        }
+        
+        return { user: sessionData.session.user, session: sessionData.session }
+      }
+      
+      // Regular code exchange for non-PKCE flows
       const { data, error } = await supabase.auth.exchangeCodeForSession(code)
       
       if (error) {
@@ -182,7 +202,7 @@ export default function AuthCallbackPage(): JSX.Element {
 
         console.log("AuthCallback: Type:", type, "Has code:", !!code)
 
-        // Handle missing code
+        // Handle missing code - for PKCE recovery, code might not be present
         if (!code) {
           console.log("AuthCallback: No code, checking existing session...")
           debug.step = "no_code_check_session"
@@ -192,6 +212,26 @@ export default function AuthCallbackPage(): JSX.Element {
           if (sessionData.session?.user) {
             console.log("AuthCallback: Found existing session")
             const user = sessionData.session.user
+            
+            // If this is a recovery type but no code, it might be PKCE recovery
+            if (isRecovery) {
+              console.log("AuthCallback: Recovery session without code - treating as PKCE recovery")
+              debug.step = "pkce_recovery_session"
+              
+              if (timeoutRef.current) {
+                clearTimeout(timeoutRef.current)
+              }
+
+              setStatus("recovery")
+              setMessage("Recovery link verified! Redirecting to password reset...")
+              setDebugInfo({ ...debug, userEmail: user.email })
+
+              // IMMEDIATELY redirect to password reset
+              setTimeout(() => router.push("/auth/reset-password?from=recovery"), 1000)
+              return
+            }
+            
+            // Regular session handling
             await logUserAccess(user.id, user.app_metadata?.provider || "email")
             handleSuccess(user, "/", { ...debug, step: "existing_session" })
             return
