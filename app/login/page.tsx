@@ -2,13 +2,13 @@
 import { useState, useEffect, useMemo } from "react"
 import type React from "react"
 import { useRouter } from "next/navigation"
-import { 
-  signInWithEmail, 
-  signUpWithEmail, 
-  signInWithGoogle, 
+import {
+  signInWithEmail,
+  signUpWithEmail,
+  signInWithGoogle,
   resendConfirmation,
   hasVerifiedAccess,
-  needsEmailVerification
+  needsEmailVerification,
 } from "@/lib/auth"
 import { supabase } from "@/lib/supabase"
 import { Button } from "@/components/ui/button"
@@ -73,7 +73,7 @@ export default function LoginPage(): JSX.Element {
   const userHasAccess = useMemo(() => {
     if (!currentUser) return false
     return hasVerifiedAccess(currentUser)
-  }, [currentUser?.id, currentUser?.email_confirmed_at, currentUser?.app_metadata?.provider])
+  }, [currentUser?.id, currentUser])
 
   const userNeedsVerification = useMemo(() => {
     if (!currentUser) return false
@@ -107,14 +107,14 @@ export default function LoginPage(): JSX.Element {
             userEmail: user.email,
             emailConfirmed: user.email_confirmed_at,
             provider: user.app_metadata?.provider,
-            hasAccess: hasVerifiedAccess(user)
+            hasAccess: hasVerifiedAccess(user),
           }))
 
           console.log("Login page: Found existing session:", {
             email: user.email,
             confirmed: user.email_confirmed_at,
             provider: user.app_metadata?.provider,
-            hasAccess: hasVerifiedAccess(user)
+            hasAccess: hasVerifiedAccess(user),
           })
 
           // Check if user has verified access
@@ -137,7 +137,7 @@ export default function LoginPage(): JSX.Element {
             userEmail: undefined,
             emailConfirmed: null,
             provider: undefined,
-            hasAccess: false
+            hasAccess: false,
           }))
         }
       } catch (err) {
@@ -160,14 +160,14 @@ export default function LoginPage(): JSX.Element {
 
     try {
       const { data, error } = await signInWithEmail(email, password)
-      
+
       const signInDebug = {
         email,
         hasData: !!data,
         hasUser: !!data?.user,
         hasSession: !!data?.session,
         error: error?.message,
-        userVerified: data?.user ? hasVerifiedAccess(data.user) : false
+        userVerified: data?.user ? hasVerifiedAccess(data.user) : false,
       }
 
       setDebugInfo((prev) => ({
@@ -237,7 +237,7 @@ export default function LoginPage(): JSX.Element {
 
     try {
       const { data, error } = await signUpWithEmail(email, password, fullName)
-      
+
       const signUpDebug = {
         email,
         hasData: !!data,
@@ -277,7 +277,7 @@ export default function LoginPage(): JSX.Element {
 
     try {
       const { error } = await resendConfirmation(pendingEmail)
-      
+
       const resendDebug = {
         email: pendingEmail,
         error: error?.message,
@@ -310,7 +310,7 @@ export default function LoginPage(): JSX.Element {
     try {
       console.log("Attempting Google sign in")
       const { data, error } = await signInWithGoogle()
-      
+
       const googleDebug = {
         hasData: !!data,
         error: error?.message,
@@ -460,10 +460,10 @@ export default function LoginPage(): JSX.Element {
                   <span className="bg-white px-2 text-muted-foreground">Or continue with</span>
                 </div>
               </div>
-              <Button 
-                variant="outline" 
-                className="w-full mt-4" 
-                onClick={handleGoogleSignIn} 
+              <Button
+                variant="outline"
+                className="w-full mt-4"
+                onClick={handleGoogleSignIn}
                 disabled={loading}
                 type="button"
               >
@@ -492,10 +492,10 @@ export default function LoginPage(): JSX.Element {
             {/* Resend Confirmation Button */}
             {showResendButton && (
               <div className="mt-4">
-                <Button 
-                  variant="outline" 
-                  className="w-full" 
-                  onClick={handleResendConfirmation} 
+                <Button
+                  variant="outline"
+                  className="w-full"
+                  onClick={handleResendConfirmation}
                   disabled={loading}
                   type="button"
                 >
@@ -507,13 +507,7 @@ export default function LoginPage(): JSX.Element {
 
             {/* Debug Toggle */}
             <div className="mt-4">
-              <Button 
-                variant="ghost" 
-                size="sm" 
-                onClick={toggleDebug} 
-                className="w-full text-xs"
-                type="button"
-              >
+              <Button variant="ghost" size="sm" onClick={toggleDebug} className="w-full text-xs" type="button">
                 <Bug className="mr-2 h-3 w-3" />
                 {showDebug ? "Hide" : "Show"} Debug Info
               </Button>
@@ -521,13 +515,7 @@ export default function LoginPage(): JSX.Element {
 
             {/* Clear Form Button */}
             <div className="mt-2">
-              <Button 
-                variant="ghost" 
-                size="sm" 
-                onClick={clearForm} 
-                className="w-full text-xs"
-                type="button"
-              >
+              <Button variant="ghost" size="sm" onClick={clearForm} className="w-full text-xs" type="button">
                 Clear Form
               </Button>
             </div>
@@ -546,20 +534,6 @@ export default function LoginPage(): JSX.Element {
               </Alert>
             )}
 
-            {/* Email Verification Notice */}
-            <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-              <div className="flex items-start gap-3">
-                <Mail className="h-5 w-5 text-blue-600 mt-0.5" />
-                <div>
-                  <h4 className="text-sm font-semibold text-blue-900">Email Verification Required</h4>
-                  <p className="text-xs text-blue-700 mt-1">
-                    For security purposes, you must verify your email address before accessing the Crown Royal Strategic
-                    Report. Check your spam folder if you don't see the email.
-                  </p>
-                </div>
-              </div>
-            </div>
-
             {/* Debug Information */}
             {showDebug && (
               <div className="mt-4 p-4 bg-gray-100 rounded-lg text-xs font-mono overflow-auto max-h-96">
@@ -567,15 +541,21 @@ export default function LoginPage(): JSX.Element {
                 <div className="space-y-2">
                   <div>
                     <p className="font-semibold">Current State:</p>
-                    <pre>{JSON.stringify({
-                      hasSession: debugInfo.hasSession,
-                      userEmail: debugInfo.userEmail,
-                      emailConfirmed: debugInfo.emailConfirmed,
-                      provider: debugInfo.provider,
-                      hasAccess: debugInfo.hasAccess,
-                      userHasAccess: userHasAccess,
-                      userNeedsVerification: userNeedsVerification
-                    }, null, 2)}</pre>
+                    <pre>
+                      {JSON.stringify(
+                        {
+                          hasSession: debugInfo.hasSession,
+                          userEmail: debugInfo.userEmail,
+                          emailConfirmed: debugInfo.emailConfirmed,
+                          provider: debugInfo.provider,
+                          hasAccess: debugInfo.hasAccess,
+                          userHasAccess: userHasAccess,
+                          userNeedsVerification: userNeedsVerification,
+                        },
+                        null,
+                        2,
+                      )}
+                    </pre>
                   </div>
                   {debugInfo.signInAttempt && (
                     <div>
