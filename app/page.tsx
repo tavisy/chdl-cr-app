@@ -1,6 +1,9 @@
 "use client"
 
-import { useState } from "react"
+import { useSearchParams } from "next/navigation"
+import { useEffect, useState } from "react"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { CheckCircle, X } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -10,6 +13,20 @@ import Link from "next/link"
 
 export default function HomePage() {
   const [activeSection, setActiveSection] = useState("overview")
+
+  const searchParams = useSearchParams()
+  const [showPasswordChangeSuccess, setShowPasswordChangeSuccess] = useState(false)
+
+  useEffect(() => {
+    if (searchParams.get("password_changed") === "true") {
+      setShowPasswordChangeSuccess(true)
+      // Auto-hide after 10 seconds
+      const timer = setTimeout(() => {
+        setShowPasswordChangeSuccess(false)
+      }, 10000)
+      return () => clearTimeout(timer)
+    }
+  }, [searchParams])
 
   const sections = [
     { id: "overview", title: "Executive Overview", icon: BarChart3 },
@@ -23,6 +40,26 @@ export default function HomePage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
+      {/* Password Change Success Alert */}
+      {showPasswordChangeSuccess && (
+        <div className="fixed top-20 left-1/2 transform -translate-x-1/2 z-50 w-full max-w-md px-4">
+          <Alert className="bg-green-50 border-green-200 shadow-lg">
+            <CheckCircle className="h-4 w-4 text-green-600" />
+            <AlertDescription className="text-green-800 pr-8">
+              <strong>Password Updated Successfully!</strong>
+              <br />
+              Your password has been changed and you're now logged in.
+            </AlertDescription>
+            <button
+              onClick={() => setShowPasswordChangeSuccess(false)}
+              className="absolute top-2 right-2 text-green-600 hover:text-green-800"
+              aria-label="Close"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </Alert>
+        </div>
+      )}
       {/* Hero Section */}
       <div className="relative bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 text-white">
         <div className="absolute inset-0 bg-black/20"></div>

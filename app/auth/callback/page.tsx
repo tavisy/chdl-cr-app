@@ -140,14 +140,14 @@ export default function AuthCallback(): JSX.Element {
 
               clearTimeout(timeoutRef.current!)
               setStatus("recovery")
-              setMessage("Password recovery successful! You can now set a new password.")
+              setMessage("Password recovery successful! Please set your new password.")
               setDebugInfo(debug)
 
               // Redirect to a password reset form or show success message
               setTimeout(() => {
                 // You might want to redirect to a dedicated password reset page
                 // For now, we'll redirect to the main app since the user is authenticated
-                router.push("/?password_reset=true")
+                router.push("/auth/reset-password")
               }, 3000)
               return
             } else {
