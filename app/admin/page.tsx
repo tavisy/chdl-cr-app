@@ -19,6 +19,7 @@ import {
   Info,
   Shield,
   AlertTriangle,
+  RefreshCw,
 } from "lucide-react"
 
 export default function AdminDashboard() {
@@ -26,6 +27,7 @@ export default function AdminDashboard() {
   const [users, setUsers] = useState([])
   const [accessLogs, setAccessLogs] = useState([])
   const [isLoading, setIsLoading] = useState(true)
+  const [isRefreshing, setIsRefreshing] = useState(false)
   const [isAuthorized, setIsAuthorized] = useState(false)
   const [authError, setAuthError] = useState("")
   const [searchTerm, setSearchTerm] = useState("")
@@ -39,6 +41,56 @@ export default function AdminDashboard() {
   })
 
   const supabase = createClientComponentClient()
+
+  // Helper functions defined early to avoid initialization errors
+  const getUserEmail = (userId) => {
+    const user = users.find((u) => u.id === userId)
+    return user?.email || `User ${userId?.substring(0, 8)}...` || "Unknown"
+  }
+
+  const getDeviceType = (userAgent) => {
+    if (!userAgent) return "Unknown"
+    if (userAgent.match(/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i)) {
+      return "Mobile"
+    } else if (userAgent.match(/iPad|Android|Tablet/i)) {
+      return "Tablet"
+    } else {
+      return "Desktop"
+    }
+  }
+
+  const formatDate = (dateString) => {
+    if (!dateString) return "N/A"
+    const date = new Date(dateString)
+    return date.toLocaleString()
+  }
+
+  const exportCSV = (data, filename) => {
+    if (!data || !data.length) return
+
+    const headers = Object.keys(data[0])
+    const csvRows = [
+      headers.join(","),
+      ...data.map((row) =>
+        headers
+          .map((header) =>
+            typeof row[header] === "string" && row[header]?.includes(",") ? `"${row[header]}"` : row[header],
+          )
+          .join(","),
+      ),
+    ]
+
+    const csvContent = csvRows.join("\n")
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement("a")
+    link.setAttribute("href", url)
+    link.setAttribute("download", `${filename}.csv`)
+    link.style.visibility = "hidden"
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+  }
 
   useEffect(() => {
     const checkAdminAccess = async () => {
@@ -66,19 +118,18 @@ export default function AdminDashboard() {
         console.log("Current user:", currentUser.email)
         setUser(currentUser)
 
-        // Fixed admin check - more comprehensive
+        // Check if user is admin
         const isAdmin =
           currentUser.email?.includes("@carterhales") ||
           currentUser.email?.includes("@bignerd") ||
           currentUser.email?.includes("admin") ||
-          currentUser.email?.includes("tavis@") ||
-          currentUser.email === "tav@bignerdlsolutions.com" ||
-          currentUser.email === "tavis@gmail.com"
+          currentUser.email === "tavis@gmail.com" ||
+          currentUser.email === "tav@bignerdlsolutions.com"
 
         console.log("Is admin:", isAdmin, "Email:", currentUser.email)
 
         if (!isAdmin) {
-          console.log("User is not admin, redirecting")
+          console.log("User is not admin")
           setAuthError("Access denied. Admin privileges required.")
           setIsLoading(false)
           return
@@ -101,188 +152,47 @@ export default function AdminDashboard() {
 
   const loadDashboardData = async () => {
     try {
-      console.log("Loading dashboard data...")
+      setIsRefreshing(true)
+      console.log("Loading dashboard data via API...")
 
-      // Calculate date range based on selected time range
-      const now = new Date()
-      const startDate = new Date()
-
-      switch (timeRange) {
-        case "24h":
-          startDate.setHours(startDate.getHours() - 24)
-          break
-        case "7d":
-          startDate.setDate(startDate.getDate() - 7)
-          break
-        case "30d":
-          startDate.setDate(startDate.getDate() - 30)
-          break
-        case "90d":
-          startDate.setDate(startDate.getDate() - 90)
-          break
+      // Fetch users via admin API (bypasses RLS)
+      const usersResponse = await fetch("/api/admin/users")
+      if (!usersResponse.ok) {
+        throw new Error(`Users API error: ${usersResponse.status}`)
       }
+      const usersData = await usersResponse.json()
+      console.log("Users fetched via API:", usersData.users?.length || 0)
+      setUsers(usersData.users || [])
 
-      console.log("Fetching ALL access logs as admin...")
-      
-      // Try using admin RPC function first
-      let allLogsData = []
-      try {
-        const { data: rpcLogsData, error: rpcLogsError } = await supabase
-          .rpc('get_all_access_logs_admin', { 
-            days_back: timeRange === "24h" ? 1 : timeRange === "7d" ? 7 : timeRange === "30d" ? 30 : 90 
-          })
-
-        if (rpcLogsError) {
-          console.error("RPC access logs error:", rpcLogsError)
-        } else if (rpcLogsData) {
-          console.log("Access logs via RPC:", rpcLogsData.length)
-          allLogsData = rpcLogsData
-        }
-      } catch (rpcError) {
-        console.error("RPC function not available:", rpcError)
+      // Fetch access logs via admin API (bypasses RLS)
+      const logsResponse = await fetch(`/api/admin/logs?timeRange=${timeRange}`)
+      if (!logsResponse.ok) {
+        throw new Error(`Logs API error: ${logsResponse.status}`)
       }
-
-      // Fallback to direct table access
-      if (!allLogsData || allLogsData.length === 0) {
-        console.log("Trying direct access logs query...")
-        const { data: directLogsData, error: directLogsError } = await supabase
-          .from("access_logs")
-          .select("*")
-          .gte("accessed_at", startDate.toISOString())
-          .order("accessed_at", { ascending: false })
-
-        if (directLogsError) {
-          console.error("Direct access logs error:", directLogsError)
-          console.error("RLS might be blocking admin access to logs")
-        } else {
-          console.log("Access logs via direct query:", directLogsData?.length || 0)
-          allLogsData = directLogsData || []
-        }
-      }
-
-      setAccessLogs(allLogsData)
-
-      console.log("Fetching ALL users from profiles...")
-      
-      // Try using admin RPC function first
-      let usersData = []
-      try {
-        const { data: rpcUsersData, error: rpcUsersError } = await supabase
-          .rpc('get_all_users_admin')
-
-        if (rpcUsersError) {
-          console.error("RPC users error:", rpcUsersError)
-        } else if (rpcUsersData && rpcUsersData.length > 0) {
-          console.log("Users via RPC:", rpcUsersData.length)
-          usersData = rpcUsersData
-        }
-      } catch (rpcError) {
-        console.error("RPC function not available:", rpcError)
-      }
-
-      // Fallback to direct table access
-      if (!usersData || usersData.length === 0) {
-        console.log("Trying direct profiles query...")
-        const { data: directProfilesData, error: directProfilesError } = await supabase
-          .from("profiles")
-          .select("*")
-          .order("created_at", { ascending: false })
-
-        if (directProfilesError) {
-          console.error("Direct profiles error:", directProfilesError)
-          console.error("RLS might be blocking admin access to profiles")
-        } else if (directProfilesData && directProfilesData.length > 0) {
-          console.log("Users via direct query:", directProfilesData.length)
-          usersData = directProfilesData
-        }
-      }
-
-      // If profiles are empty or limited, try to get user data from access logs
-      if (!usersData || usersData.length === 0 || (allLogsData && usersData.length < new Set(allLogsData.map(log => log.user_id)).size)) {
-        console.log("Profiles incomplete, creating comprehensive user data from access logs...")
-        
-        if (allLogsData && allLogsData.length > 0) {
-          // Group access logs by user_id to create user profiles
-          const userMap = new Map()
-          
-          allLogsData.forEach(log => {
-            if (!userMap.has(log.user_id)) {
-              userMap.set(log.user_id, {
-                id: log.user_id,
-                email: `User ${log.user_id.substring(0, 8)}...`,
-                full_name: null,
-                created_at: log.accessed_at,
-                updated_at: log.accessed_at,
-                last_login_at: log.accessed_at,
-                login_count: 1,
-                is_admin: false,
-                role: 'user',
-                is_active: true,
-                avatar_url: null
-              })
-            } else {
-              const existing = userMap.get(log.user_id)
-              existing.login_count += 1
-              if (new Date(log.accessed_at) > new Date(existing.last_login_at)) {
-                existing.last_login_at = log.accessed_at
-              }
-              if (new Date(log.accessed_at) < new Date(existing.created_at)) {
-                existing.created_at = log.accessed_at
-              }
-            }
-          })
-
-          const usersFromLogs = Array.from(userMap.values())
-          console.log("Users created from access logs:", usersFromLogs.length)
-          
-          // Merge with existing profiles data if any
-          if (usersData && usersData.length > 0) {
-            // Update existing profiles with access log data
-            usersData = usersData.map(profile => {
-              const logUser = userMap.get(profile.id)
-              if (logUser) {
-                return {
-                  ...profile,
-                  login_count: logUser.login_count,
-                  last_login_at: logUser.last_login_at
-                }
-              }
-              return profile
-            })
-            
-            // Add any users from logs that aren't in profiles
-            usersFromLogs.forEach(logUser => {
-              if (!usersData.find(p => p.id === logUser.id)) {
-                usersData.push(logUser)
-              }
-            })
-          } else {
-            usersData = usersFromLogs
-          }
-        }
-      }
-
-      console.log("Final users data:", usersData?.length || 0)
-      setUsers(usersData || [])
+      const logsData = await logsResponse.json()
+      console.log("Access logs fetched via API:", logsData.logs?.length || 0)
+      setAccessLogs(logsData.logs || [])
 
       // Calculate statistics
-      const logsData = allLogsData || []
-      if (usersData && logsData) {
-        const uniqueVisitors = new Set(logsData.map((log) => log.user_id)).size
-        const googleLogins = logsData.filter((log) => log.login_method === "google").length
-        const emailLogins = logsData.filter((log) => log.login_method === "email").length
+      const users = usersData.users || []
+      const logs = logsData.logs || []
+
+      if (users && logs) {
+        const uniqueVisitors = new Set(logs.map((log) => log.user_id)).size
+        const googleLogins = logs.filter((log) => log.login_method === "google").length
+        const emailLogins = logs.filter((log) => log.login_method === "email").length
 
         setStats({
-          totalUsers: usersData.length,
-          totalLogins: logsData.length,
+          totalUsers: users.length,
+          totalLogins: logs.length,
           uniqueVisitors,
           googleLogins,
           emailLogins,
         })
 
         console.log("Stats calculated:", {
-          totalUsers: usersData.length,
-          totalLogins: logsData.length,
+          totalUsers: users.length,
+          totalLogins: logs.length,
           uniqueVisitors,
           googleLogins,
           emailLogins,
@@ -290,18 +200,19 @@ export default function AdminDashboard() {
       }
 
       setIsLoading(false)
+      setIsRefreshing(false)
       console.log("Dashboard data loaded successfully")
     } catch (error) {
       console.error("Error loading dashboard data:", error)
-      setAuthError("Failed to load dashboard data")
+      setAuthError(`Failed to load dashboard data: ${error.message}`)
       setIsLoading(false)
+      setIsRefreshing(false)
     }
   }
 
   // Reload data when time range changes
   useEffect(() => {
     if (isAuthorized && !isLoading) {
-      setIsLoading(true)
       loadDashboardData()
     }
   }, [timeRange])
@@ -317,61 +228,9 @@ export default function AdminDashboard() {
   const filteredLogs = accessLogs.filter(
     (log) =>
       log.user_agent?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      log.login_method?.toLowerCase().includes(searchTerm.toLowerCase()),
+      log.login_method?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      getUserEmail(log.user_id)?.toLowerCase().includes(searchTerm.toLowerCase()),
   )
-
-  // Helper function to detect device type from user agent
-  const getDeviceType = (userAgent) => {
-    if (!userAgent) return "Unknown"
-    if (userAgent.match(/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i)) {
-      return "Mobile"
-    } else if (userAgent.match(/iPad|Android|Tablet/i)) {
-      return "Tablet"
-    } else {
-      return "Desktop"
-    }
-  }
-
-  // Export data as CSV
-  const exportCSV = (data, filename) => {
-    if (!data || !data.length) return
-
-    const headers = Object.keys(data[0])
-    const csvRows = [
-      headers.join(","),
-      ...data.map((row) =>
-        headers
-          .map((header) =>
-            typeof row[header] === "string" && row[header].includes(",") ? `"${row[header]}"` : row[header],
-          )
-          .join(","),
-      ),
-    ]
-
-    const csvContent = csvRows.join("\n")
-    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" })
-    const url = URL.createObjectURL(blob)
-    const link = document.createElement("a")
-    link.setAttribute("href", url)
-    link.setAttribute("download", `${filename}.csv`)
-    link.style.visibility = "hidden"
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-  }
-
-  // Format date for display
-  const formatDate = (dateString) => {
-    if (!dateString) return "N/A"
-    const date = new Date(dateString)
-    return date.toLocaleString()
-  }
-
-  // Get user email from user_id by looking up in users array
-  const getUserEmail = (userId) => {
-    const user = users.find((u) => u.id === userId)
-    return user?.email || `User ${userId?.substring(0, 8)}...` || "Unknown"
-  }
 
   // Show loading state
   if (isLoading) {
@@ -406,9 +265,7 @@ export default function AdminDashboard() {
 
             <div className="text-center space-y-2">
               <p className="text-sm text-slate-600">Current user: {user?.email || "Not logged in"}</p>
-              <p className="text-xs text-slate-500">
-                Admin access requires an authorized email address
-              </p>
+              <p className="text-xs text-slate-500">Admin access requires an authorized email address</p>
             </div>
 
             <div className="flex gap-2">
@@ -432,32 +289,40 @@ export default function AdminDashboard() {
           <h1 className="text-3xl font-bold">Admin Dashboard</h1>
           <p className="text-slate-600">Welcome, {user?.email}</p>
         </div>
+        <Button
+          onClick={loadDashboardData}
+          variant="outline"
+          size="sm"
+          disabled={isRefreshing}
+          className="flex items-center gap-2"
+        >
+          <RefreshCw className={`h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`} />
+          {isRefreshing ? "Refreshing..." : "Refresh Data"}
+        </Button>
       </div>
 
-      {/* Debug Info for Development */}
-      {process.env.NODE_ENV === "development" && (
-        <Card className="mb-6 border-blue-200 bg-blue-50">
-          <CardHeader>
-            <CardTitle className="text-blue-800">Debug Information</CardTitle>
-          </CardHeader>
-          <CardContent className="text-sm">
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <strong>Users Table Records:</strong> {users.length}
-              </div>
-              <div>
-                <strong>Access Logs Records:</strong> {accessLogs.length}
-              </div>
-              <div>
-                <strong>Time Range:</strong> {timeRange}
-              </div>
-              <div>
-                <strong>Unique Log Users:</strong> {new Set(accessLogs.map(log => log.user_id)).size}
-              </div>
+      {/* Debug Info */}
+      <Card className="mb-6 border-blue-200 bg-blue-50">
+        <CardHeader>
+          <CardTitle className="text-blue-800">Debug Information</CardTitle>
+        </CardHeader>
+        <CardContent className="text-sm">
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <strong>Users Table Records:</strong> {users.length}
             </div>
-          </CardContent>
-        </Card>
-      )}
+            <div>
+              <strong>Access Logs Records:</strong> {accessLogs.length}
+            </div>
+            <div>
+              <strong>Time Range:</strong> {timeRange}
+            </div>
+            <div>
+              <strong>Unique Log Users:</strong> {new Set(accessLogs.map((log) => log.user_id)).size}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Time range selector */}
       <div className="flex flex-wrap gap-2 mb-6">
@@ -613,7 +478,8 @@ export default function AdminDashboard() {
                       <th className="text-left py-3 px-4 font-medium">Name</th>
                       <th className="text-left py-3 px-4 font-medium">Email</th>
                       <th className="text-left py-3 px-4 font-medium">Created</th>
-                      <th className="text-left py-3 px-4 font-medium">Last Updated</th>
+                      <th className="text-left py-3 px-4 font-medium">Last Login</th>
+                      <th className="text-left py-3 px-4 font-medium">Login Count</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -623,12 +489,13 @@ export default function AdminDashboard() {
                           <td className="py-3 px-4">{user.full_name || "N/A"}</td>
                           <td className="py-3 px-4">{user.email}</td>
                           <td className="py-3 px-4">{formatDate(user.created_at)}</td>
-                          <td className="py-3 px-4">{formatDate(user.updated_at)}</td>
+                          <td className="py-3 px-4">{formatDate(user.last_login_at)}</td>
+                          <td className="py-3 px-4">{user.login_count || 0}</td>
                         </tr>
                       ))
                     ) : (
                       <tr>
-                        <td colSpan={4} className="text-center py-4">
+                        <td colSpan={5} className="text-center py-4">
                           {searchTerm ? "No users match your search" : "No users found"}
                         </td>
                       </tr>
