@@ -3,7 +3,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { ArrowLeft, TrendingUp, TrendingDown, Minus } from "lucide-react"
+import { ArrowLeft, TrendingUp, TrendingDown, Minus, ExternalLink } from "lucide-react"
 import Link from "next/link"
 
 export default function CompetitiveAnalysis() {
@@ -145,24 +145,26 @@ export default function CompetitiveAnalysis() {
                     ))}
                   </ul>
                 </CardContent>
-                <div className="text-xs text-slate-600 mt-4">
-                  <a
-                    href="https://www.datainsightsmarket.com/reports/north-american-whiskies-1244923"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-blue-600 hover:underline"
-                  >
-                    [1] Data Insights Market
-                  </a>
-                  {" | "}
-                  <a
-                    href="https://domesticfits.com/crown-royal-flavors/"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-blue-600 hover:underline"
-                  >
-                    [7] Crown Royal Analysis
-                  </a>
+                <div className="px-6 pb-4">
+                  <div className="text-xs text-slate-600">
+                    <a
+                      href="https://www.datainsightsmarket.com/reports/north-american-whiskies-1244923"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 text-blue-600 hover:underline"
+                    >
+                      [1] Data Insights Market <ExternalLink className="h-3 w-3" />
+                    </a>
+                    {" | "}
+                    <a
+                      href="https://domesticfits.com/crown-royal-flavors/"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 text-blue-600 hover:underline"
+                    >
+                      [7] Crown Royal Analysis <ExternalLink className="h-3 w-3" />
+                    </a>
+                  </div>
                 </div>
               </Card>
 
@@ -311,9 +313,9 @@ export default function CompetitiveAnalysis() {
                   href="https://www.weku.org/the-commonwealth/2025-02-11/us-sales-fall-for-american-whiskey-as-trade-war-threats-continue"
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-xs text-blue-600 hover:underline"
+                  className="inline-flex items-center gap-1 text-xs text-blue-600 hover:underline"
                 >
-                  [19]
+                  [19] <ExternalLink className="h-3 w-3" />
                 </a>
                 . This decline coincides with what industry experts characterize as a market correction rather than
                 temporary shortage{" "}
@@ -321,9 +323,9 @@ export default function CompetitiveAnalysis() {
                   href="https://felenevodka.com/the-bourbon-boom-an-illusion-or-market-on-the-brink-of-correction/"
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-xs text-blue-600 hover:underline"
+                  className="inline-flex items-center gap-1 text-xs text-blue-600 hover:underline"
                 >
-                  [15]
+                  [15] <ExternalLink className="h-3 w-3" />
                 </a>
                 .
               </p>

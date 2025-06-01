@@ -4,7 +4,7 @@ import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
-import { ArrowLeft, AlertTriangle } from "lucide-react"
+import { ArrowLeft, AlertTriangle, ExternalLink } from "lucide-react"
 import Link from "next/link"
 
 export default function MarketDisruption() {
@@ -203,9 +203,9 @@ export default function MarketDisruption() {
                             href="https://www.weku.org/the-commonwealth/2025-02-11/us-sales-fall-for-american-whiskey-as-trade-war-threats-continue"
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="text-xs text-blue-600 hover:underline"
+                            className="inline-flex items-center gap-1 text-xs text-blue-600 hover:underline"
                           >
-                            [19]
+                            [19] <ExternalLink className="h-3 w-3" />
                           </a>
                         )}
                       </p>
@@ -219,9 +219,9 @@ export default function MarketDisruption() {
                             href="https://www.thedrinksbusiness.com/2025/03/us-whiskey-rushes-to-eu-before-50-tariffs-hit-but-will-it-be-enough/"
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="text-blue-600 hover:underline"
+                            className="inline-flex items-center gap-1 text-blue-600 hover:underline"
                           >
-                            [18] The Drinks Business
+                            [18] The Drinks Business <ExternalLink className="h-3 w-3" />
                           </a>
                         </div>
                       )}
@@ -231,9 +231,9 @@ export default function MarketDisruption() {
                             href="https://bourbonsbistro.com/press/2022/1/17/wheres-the-bourbon-shortage-shows-no-signs-of-slowing-down"
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="text-blue-600 hover:underline"
+                            className="inline-flex items-center gap-1 text-blue-600 hover:underline"
                           >
-                            [16] Bourbons Bistro
+                            [16] Bourbons Bistro <ExternalLink className="h-3 w-3" />
                           </a>
                         </div>
                       )}
