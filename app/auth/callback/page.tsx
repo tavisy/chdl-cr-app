@@ -208,21 +208,21 @@ export default function AuthCallbackPage(): JSX.Element {
 
         const { user, session } = await exchangeCodeForSession(code, isRecovery)
 
-        // Handle recovery flow
+        // Handle recovery flow - MUST redirect to password reset
         if (isRecovery) {
-          console.log("AuthCallback: Processing recovery flow")
-          debug.step = "recovery_success"
+          console.log("AuthCallback: Processing recovery flow - redirecting to password reset")
+          debug.step = "recovery_redirect_to_reset"
           
           if (timeoutRef.current) {
             clearTimeout(timeoutRef.current)
           }
 
           setStatus("recovery")
-          setMessage("Password recovery successful! You can now update your password.")
+          setMessage("Recovery link verified! Redirecting to password reset...")
           setDebugInfo({ ...debug, userEmail: user.email })
 
-          // For recovery, redirect to password reset page with recovery flag
-          setTimeout(() => router.push("/auth/reset-password?from=recovery"), 2000)
+          // IMMEDIATELY redirect to password reset - do not allow access to app
+          setTimeout(() => router.push("/auth/reset-password?from=recovery"), 1000)
           return
         }
 

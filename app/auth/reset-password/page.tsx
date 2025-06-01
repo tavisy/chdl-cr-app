@@ -100,7 +100,7 @@ export default function ResetPasswordPage(): JSX.Element {
     return passwordValidation.isValid && passwordsMatch && !loading
   }, [passwordValidation.isValid, passwordsMatch, loading])
 
-  // Session validation effect
+  // Session validation effect - Enhanced for stricter recovery validation
   useEffect(() => {
     let mounted = true
 
@@ -108,9 +108,10 @@ export default function ResetPasswordPage(): JSX.Element {
       try {
         console.log("ResetPassword: Validating session...")
 
-        // Check if user came from recovery flow
+        // Check if user came from recovery flow or security check
         const fromRecovery = searchParams.get("from") === "recovery"
-        console.log("ResetPassword: From recovery flow:", fromRecovery)
+        const securityCheck = searchParams.get("security") === "check"
+        console.log("ResetPassword: From recovery flow:", fromRecovery, "Security check:", securityCheck)
 
         const currentUser = await getCurrentUser()
 
@@ -122,11 +123,11 @@ export default function ResetPasswordPage(): JSX.Element {
           return
         }
 
-        // Additional validation for recovery flow
-        if (fromRecovery) {
-          // Verify the session is recent (within last 10 minutes)
+        // For recovery or security check flows, always require password reset
+        if (fromRecovery || securityCheck) {
+          // Verify the session is very recent (within last 5 minutes for tighter security)
           const sessionAge = Date.now() - new Date(currentUser.last_sign_in_at || 0).getTime()
-          const maxSessionAge = 10 * 60 * 1000 // 10 minutes
+          const maxSessionAge = 5 * 60 * 1000 // 5 minutes
 
           if (sessionAge > maxSessionAge) {
             console.log("ResetPassword: Session too old for password reset")
@@ -135,6 +136,18 @@ export default function ResetPasswordPage(): JSX.Element {
             }
             return
           }
+
+          // For security checks, show a warning about forced password reset
+          if (securityCheck && mounted) {
+            setError("For security purposes, you must reset your password to continue.")
+          }
+        } else {
+          // If not from recovery, verify user should be here
+          console.log("ResetPassword: Direct access - verifying legitimacy")
+          if (mounted) {
+            setSessionError("Direct access not allowed. Please use a password reset link.")
+          }
+          return
         }
 
         console.log("ResetPassword: Valid session found for:", currentUser.email)
