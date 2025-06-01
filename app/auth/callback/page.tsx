@@ -140,10 +140,19 @@ export default function AuthCallbackPage(): JSX.Element {
     }
   }, [])
 
-  // Optimized access logging with error handling
-  const logUserAccess = useCallback(async (userId: string, provider: string) => {
+  // Optimized access logging with profile updates
+  const logUserAccess = useCallback(async (user: User, provider: string) => {
     try {
-      await logAccess(userId, provider === "google" ? "google" : "email")
+      // Import the enhanced logging function
+      const { logAccessWithProfile } = await import("@/lib/auth")
+      
+      const loginMethod = provider === "google" ? "google" : "email"
+      
+      await logAccessWithProfile(user, loginMethod, {
+        userAgent: typeof window !== 'undefined' ? window.navigator.userAgent : undefined
+      })
+      
+      console.log(`Access logged with profile update for ${user.email}`)
     } catch (error) {
       // Don't fail the auth flow for logging errors, just log them
       console.warn("Failed to log user access:", error)
@@ -270,8 +279,8 @@ export default function AuthCallbackPage(): JSX.Element {
         console.log("AuthCallback: Processing regular auth flow")
         debug.step = "regular_auth_success"
 
-        // Log access asynchronously
-        logUserAccess(user.id, user.app_metadata?.provider || "email")
+        // Log access asynchronously with profile updates
+        logUserAccess(user, user.app_metadata?.provider || "email")
 
         handleSuccess(user, "/", { ...debug, step: "auth_complete" })
 

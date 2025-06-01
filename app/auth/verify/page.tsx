@@ -153,9 +153,10 @@ export default function VerifyPage(): JSX.Element {
       debug.step = "verification_success"
       debug.userEmail = data.user.email
 
-      // Log the successful email verification
+      // Log the successful email verification with profile update
       try {
-        await logAccess(data.user.id, "email")
+        const { logAccessWithProfile } = await import("@/lib/auth")
+        await logAccessWithProfile(data.user, "email")
         debug.step = "access_logged"
       } catch (logError) {
         console.warn("Verify: Failed to log access, but continuing:", logError)
