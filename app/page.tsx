@@ -1,5 +1,5 @@
 "use client"
-
+import type { FC } from "react"
 import { useSearchParams } from "next/navigation"
 import { useEffect, useState } from "react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
@@ -10,18 +10,15 @@ import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { BarChart3, Users, Target, Lightbulb, TrendingUp, Globe, TrendingDown, BookOpen } from "lucide-react"
 import Link from "next/link"
-import type { FC } from "react"
 
 const HomePage: FC = () => {
   const [activeSection, setActiveSection] = useState("overview")
-
   const searchParams = useSearchParams()
   const [showPasswordChangeSuccess, setShowPasswordChangeSuccess] = useState(false)
 
   useEffect(() => {
     if (searchParams.get("password_changed") === "true") {
       setShowPasswordChangeSuccess(true)
-      // Auto-hide after 10 seconds
       const timer = setTimeout(() => {
         setShowPasswordChangeSuccess(false)
       }, 10000)
@@ -49,7 +46,7 @@ const HomePage: FC = () => {
             <AlertDescription className="text-green-800 pr-8">
               <strong>Password Updated Successfully!</strong>
               <br />
-              Your password has been changed and you're now logged in.
+              Your password has been changed and you&apos;re now logged in.
             </AlertDescription>
             <button
               onClick={() => setShowPasswordChangeSuccess(false)}
@@ -61,6 +58,7 @@ const HomePage: FC = () => {
           </Alert>
         </div>
       )}
+
       {/* Hero Section */}
       <div className="relative bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 text-white">
         <div className="absolute inset-0 bg-black/20"></div>
@@ -82,7 +80,6 @@ const HomePage: FC = () => {
             </p>
           </div>
         </div>
-        {/* Recommended Image: Sophisticated whiskey distillery landscape with Canadian elements */}
         <div className="absolute bottom-0 left-0 right-0 h-32 bg-gradient-to-t from-slate-50 to-transparent"></div>
       </div>
 
@@ -146,6 +143,8 @@ const HomePage: FC = () => {
                   </Button>
                 )
               }
+
+              return null
             })}
           </div>
         </div>
@@ -229,12 +228,12 @@ const HomePage: FC = () => {
               <Card className="p-8 border-l-4 border-l-blue-600">
                 <h3 className="text-2xl font-semibold mb-4 text-slate-900">Strategic Opportunity</h3>
                 <p className="text-slate-700 leading-relaxed mb-4">
-                  The core challenge lies in authentically leveraging Crown Royal's rich Canadian identity – its unique
-                  production methods, pristine geographical advantages, and legacy of craftsmanship – to resonate with a
-                  bourbon-centric palate.
+                  The core challenge lies in authentically leveraging Crown Royal&apos;s rich Canadian identity – its
+                  unique production methods, pristine geographical advantages, and legacy of craftsmanship – to resonate
+                  with a bourbon-centric palate.
                 </p>
                 <p className="text-slate-700 leading-relaxed">
-                  The strategic imperative is to reframe Crown Royal's narrative, enhance its visual identity, and
+                  The strategic imperative is to reframe Crown Royal&apos;s narrative, enhance its visual identity, and
                   innovate its product offerings to highlight its inherent quality and complexity.
                 </p>
               </Card>
@@ -244,7 +243,7 @@ const HomePage: FC = () => {
             <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mb-12">
               <Card className="p-6 text-center hover:shadow-lg transition-shadow">
                 <div className="text-3xl font-bold text-amber-600 mb-2">42%</div>
-                <div className="text-sm text-slate-600 mb-2">Crown Royal's share of Canadian whisky market</div>
+                <div className="text-sm text-slate-600 mb-2">Crown Royal&apos;s share of Canadian whisky market</div>
               </Card>
               <Card className="p-6 text-center hover:shadow-lg transition-shadow">
                 <div className="text-3xl font-bold text-blue-600 mb-2">79%</div>
@@ -262,8 +261,6 @@ const HomePage: FC = () => {
                 <div className="text-sm text-slate-600 mb-2 font-medium">American whiskey sales decline in 2024</div>
               </Card>
             </div>
-
-            {/* Recommended Image: Infographic showing market statistics and trends */}
           </div>
         </div>
       </section>
@@ -391,7 +388,7 @@ const HomePage: FC = () => {
                 <div>
                   <h4 className="font-semibold text-slate-900 mb-2">Trade Barriers</h4>
                   <p className="text-sm text-slate-700">
-                    EU's pending 50% tariffs on American spirits in March 2025 threaten international expansion{" "}
+                    EU&apos;s pending 50% tariffs on American spirits in March 2025 threaten international expansion{" "}
                     <a
                       href="https://www.thedrinksbusiness.com/2025/03/us-whiskey-rushes-to-eu-before-50-tariffs-hit-but-will-it-be-enough/"
                       target="_blank"
@@ -411,8 +408,6 @@ const HomePage: FC = () => {
                 </div>
               </div>
             </Card>
-
-            {/* Recommended Image: Interactive chart showing whiskey category performance */}
           </div>
         </div>
       </section>
@@ -495,7 +490,7 @@ const HomePage: FC = () => {
                 <h3 className="text-xl font-semibold mb-3 text-slate-900">Experiential Consumers</h3>
                 <p className="text-slate-700 mb-4">
                   Interested in visiting distilleries, participating in tastings, and learning about whiskey-making
-                  process. View experiences as "affordable luxury."
+                  process. View experiences as &quot;affordable luxury.&quot;
                 </p>
                 <Badge variant="secondary">Experience Driven</Badge>
               </Card>
@@ -507,13 +502,11 @@ const HomePage: FC = () => {
                 <h3 className="text-xl font-semibold mb-3 text-slate-900">Value-Conscious</h3>
                 <p className="text-slate-700 mb-4">
                   Prioritize price-to-value while remaining quality-focused. Seek accessible whiskies positioned as
-                  "everyday indulgences" with quality delivery.
+                  &quot;everyday indulgences&quot; with quality delivery.
                 </p>
                 <Badge variant="secondary">Price Sensitive</Badge>
               </Card>
             </div>
-
-            {/* Recommended Image: Consumer persona illustrations or demographic infographics */}
           </div>
         </div>
       </section>
@@ -529,7 +522,9 @@ const HomePage: FC = () => {
                   <CardContent className="p-0">
                     <Target className="h-8 w-8 text-amber-400 mb-4 mx-auto" />
                     <h3 className="text-lg font-semibold mb-2 text-white">Competitive Analysis</h3>
-                    <p className="text-slate-300 text-sm">Deep dive into Crown Royal's position vs. bourbon leaders</p>
+                    <p className="text-slate-300 text-sm">
+                      Deep dive into Crown Royal&apos;s position vs. bourbon leaders
+                    </p>
                   </CardContent>
                 </Card>
               </Link>
