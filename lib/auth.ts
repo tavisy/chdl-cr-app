@@ -293,7 +293,7 @@ export async function sendPasswordReset(email: string): Promise<{ error?: any }>
     console.log("Sending password reset email for:", email)
 
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/auth/reset-password?from=recovery`,
+      redirectTo: `${window.location.origin}/auth/callback?type=recovery`,
     })
 
     if (error) {
@@ -327,8 +327,8 @@ export async function signUpWithEmail(
         data: {
           full_name: metadata?.fullName || null,
         },
-        // Use direct verification URL on your site
-        emailRedirectTo: `${window.location.origin}/auth/verify`,
+        // Use callback URL for proper flow
+        emailRedirectTo: `${window.location.origin}/auth/callback`,
       },
     })
 

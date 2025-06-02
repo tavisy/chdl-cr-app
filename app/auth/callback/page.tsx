@@ -1,347 +1,270 @@
 "use client"
-import { useEffect, useState, useRef, useCallback } from "react"
-import { useRouter } from "next/navigation"
+import { useEffect, useState, useRef } from "react"
+import { useRouter, useSearchParams } from "next/navigation"
 import { supabase } from "@/lib/supabase"
-import { hasVerifiedAccess } from "@/lib/auth"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { CheckCircle, AlertCircle, Loader2 } from "lucide-react"
+import { CheckCircle, AlertCircle, Loader2, Mail, RefreshCw } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import type { AuthError, User } from "@supabase/supabase-js"
+import { Alert, AlertDescription } from "@/components/ui/alert"
 
-type AuthStatus = "loading" | "success" | "error" | "recovery"
+type CallbackStatus = "loading" | "success" | "error" | "expired" | "already_verified"
 
 interface DebugInfo {
+  token?: string | null
+  type?: string | null
   error?: string
-  errorDescription?: string
-  exchangeError?: AuthError
   step?: string
   timestamp?: string
   fullUrl?: string
-  type?: string | null
-  isRecovery?: boolean
   userEmail?: string
-  provider?: string
-  hasAccess?: boolean
+  searchParams?: Record<string, string>
+  hashParams?: Record<string, string>
 }
 
 export default function AuthCallbackPage(): JSX.Element {
   const router = useRouter()
-  const [status, setStatus] = useState<AuthStatus>("loading")
+  const searchParams = useSearchParams()
+  const [status, setStatus] = useState<CallbackStatus>("loading")
   const [message, setMessage] = useState<string>("")
   const [debugInfo, setDebugInfo] = useState<DebugInfo | null>(null)
+  const [isResending, setIsResending] = useState<boolean>(false)
   const processedRef = useRef<boolean>(false)
   const timeoutRef = useRef<NodeJS.Timeout | null>(null)
-  const abortControllerRef = useRef<AbortController | null>(null)
-
-  // Memoized error handler
-  const handleError = useCallback((error: string, description?: string, debug?: Partial<DebugInfo>) => {
-    if (timeoutRef.current) {
-      clearTimeout(timeoutRef.current)
-    }
-
-    setStatus("error")
-    setMessage(description || error)
-    setDebugInfo((prev) => ({ ...prev, ...debug, error, errorDescription: description }))
-  }, [])
-
-  // Memoized success handler
-  const handleSuccess = useCallback(
-    (user: User, redirectPath: string, debug?: Partial<DebugInfo>) => {
-      if (timeoutRef.current) {
-        clearTimeout(timeoutRef.current)
-      }
-
-      setStatus("success")
-      setMessage("Authentication successful! Redirecting...")
-      setDebugInfo((prev) => ({
-        ...prev,
-        ...debug,
-        userEmail: user.email,
-        provider: user.app_metadata?.provider,
-        hasAccess: hasVerifiedAccess(user),
-      }))
-
-      // Use requestAnimationFrame to ensure state update is processed
-      requestAnimationFrame(() => {
-        setTimeout(() => router.push(redirectPath), 1500)
-      })
-    },
-    [router],
-  )
-
-  // Parse URL parameters with better error handling
-  const parseUrlParameters = useCallback(() => {
-    try {
-      const urlParams = new URLSearchParams(window.location.search)
-      const hashParams = new URLSearchParams(window.location.hash.substring(1))
-
-      return {
-        urlParams: Object.fromEntries(urlParams.entries()),
-        hashParams: Object.fromEntries(hashParams.entries()),
-        // Helper to get param from either location
-        getParam: (key: string) => urlParams.get(key) || hashParams.get(key),
-      }
-    } catch (error) {
-      console.error("Error parsing URL parameters:", error)
-      return {
-        urlParams: {},
-        hashParams: {},
-        getParam: () => null,
-      }
-    }
-  }, [])
-
-  // Handle both PKCE and regular code exchange
-  const exchangeCodeForSession = useCallback(async (code: string, isRecovery: boolean) => {
-    try {
-      // For recovery flows, check if this is a PKCE token (starts with 'pkce_')
-      if (isRecovery && code.startsWith("pkce_")) {
-        console.log("AuthCallback: Detected PKCE recovery token, using session check instead")
-
-        // For PKCE recovery, the user should already be signed in
-        // We just need to verify the session exists
-        const { data: sessionData, error: sessionError } = await supabase.auth.getSession()
-
-        if (sessionError) {
-          throw new Error("Failed to retrieve recovery session. Please try again.")
-        }
-
-        if (!sessionData.session?.user) {
-          throw new Error("Recovery session not found. Please request a new password reset.")
-        }
-
-        return { user: sessionData.session.user, session: sessionData.session }
-      }
-
-      // Regular code exchange for non-PKCE flows
-      const { data, error } = await supabase.auth.exchangeCodeForSession(code)
-
-      if (error) {
-        console.error("Code exchange error details:", {
-          message: error.message,
-          status: error.status,
-          name: error.name,
-        })
-
-        // Handle specific Supabase error types
-        switch (error.message) {
-          case "Invalid authorization code":
-            throw new Error(
-              isRecovery
-                ? "This recovery link has expired or is invalid. Please request a new password reset."
-                : "This authentication link has expired. Please sign in again.",
-            )
-          case "Authorization code has already been used":
-            throw new Error("This link has already been used. Please request a new one.")
-          case "Invalid grant":
-            throw new Error("Authentication session expired. Please try signing in again.")
-          default:
-            throw new Error(
-              isRecovery
-                ? "Unable to process password recovery. Please try again."
-                : `Authentication failed: ${error.message}`,
-            )
-        }
-      }
-
-      if (!data.session?.user) {
-        throw new Error("Authentication incomplete. No user session created.")
-      }
-
-      return { user: data.user, session: data.session }
-    } catch (error) {
-      console.error("Code exchange error:", error)
-      throw error
-    }
-  }, [])
-
-  // Optimized access logging with profile updates
-  const logUserAccess = useCallback(async (user: User, provider: string) => {
-    try {
-      // Import the enhanced logging function
-      const { logAccessWithProfile } = await import("@/lib/auth")
-
-      const loginMethod = provider === "google" ? "google" : "email"
-
-      await logAccessWithProfile(user, loginMethod, {
-        userAgent: typeof window !== "undefined" ? window.navigator.userAgent : undefined,
-      })
-
-      console.log(`Access logged with profile update for ${user.email}`)
-    } catch (error) {
-      // Don't fail the auth flow for logging errors, just log them
-      console.warn("Failed to log user access:", error)
-    }
-  }, [])
 
   useEffect(() => {
-    // Prevent double processing and handle cleanup
-    if (processedRef.current) return
-    processedRef.current = true
+    const handleAuthCallback = async () => {
+      if (processedRef.current) return
+      processedRef.current = true
 
-    // Create abort controller for this effect
-    abortControllerRef.current = new AbortController()
-
-    const handleAuthCallback = async (): Promise<void> => {
       const debug: DebugInfo = {
-        step: "starting",
+        step: "starting_callback",
         timestamp: new Date().toISOString(),
         fullUrl: window.location.href,
       }
 
       try {
-        console.log("AuthCallback: Processing auth callback...")
+        console.log("AuthCallback: Starting auth callback process...")
+        console.log("AuthCallback: Full URL:", window.location.href)
 
-        // Set timeout with cleanup
+        // Set timeout for callback process
         timeoutRef.current = setTimeout(() => {
-          if (!abortControllerRef.current?.signal.aborted) {
-            console.log("AuthCallback: Timeout reached")
-            handleError("Authentication timed out", "Please try again.", { ...debug, step: "timeout" })
-            setTimeout(() => router.push("/login"), 3000)
-          }
+          console.log("AuthCallback: Callback timeout reached")
+          setStatus("error")
+          setMessage("Authentication timed out. Please try again.")
+          setDebugInfo({ ...debug, step: "timeout" })
         }, 15000)
 
-        // Parse URL parameters
-        const { getParam } = parseUrlParameters()
+        // Parse all possible parameters
+        const urlSearchParams = new URLSearchParams(window.location.search)
+        const hashParams = new URLSearchParams(window.location.hash.substring(1))
 
-        // Check for errors first
-        const error = getParam("error")
-        const errorDescription = getParam("error_description")
+        // Collect all parameters for debugging
+        const searchParamsObj: Record<string, string> = {}
+        const hashParamsObj: Record<string, string> = {}
 
-        if (error) {
-          console.error("AuthCallback: URL contains error:", error)
-          handleError(error, errorDescription, { ...debug, step: "url_error" })
-          setTimeout(() => router.push("/login"), 3000)
-          return
-        }
+        urlSearchParams.forEach((value, key) => {
+          searchParamsObj[key] = value
+        })
 
-        // Get auth parameters
-        const code = getParam("code")
-        const type = getParam("type")
-        const isRecovery = type === "recovery"
+        hashParams.forEach((value, key) => {
+          hashParamsObj[key] = value
+        })
+
+        debug.searchParams = searchParamsObj
+        debug.hashParams = hashParamsObj
+
+        // Get callback type and other parameters
+        const type = urlSearchParams.get("type") || hashParams.get("type")
+        const error = urlSearchParams.get("error") || hashParams.get("error")
+        const errorDescription = urlSearchParams.get("error_description") || hashParams.get("error_description")
+        const code = urlSearchParams.get("code") || hashParams.get("code")
+        const accessToken = hashParams.get("access_token")
+        const refreshToken = hashParams.get("refresh_token")
 
         debug.type = type
-        debug.isRecovery = isRecovery
         debug.step = "params_parsed"
 
-        console.log("AuthCallback: Type:", type, "Has code:", !!code)
-
-        // Handle missing code - for PKCE recovery, code might not be present
-        if (!code) {
-          console.log("AuthCallback: No code, checking existing session...")
-          debug.step = "no_code_check_session"
-
-          const { data: sessionData } = await supabase.auth.getSession()
-
-          if (sessionData.session?.user) {
-            console.log("AuthCallback: Found existing session")
-            const user = sessionData.session.user
-
-            // If this is a recovery type but no code, it might be PKCE recovery
-            if (isRecovery) {
-              console.log("AuthCallback: Recovery session without code - treating as PKCE recovery")
-              debug.step = "pkce_recovery_session"
-
-              if (timeoutRef.current) {
-                clearTimeout(timeoutRef.current)
-              }
-
-              setStatus("recovery")
-              setMessage("Recovery link verified! Redirecting to password reset...")
-              setDebugInfo({ ...debug, userEmail: user.email })
-
-              // IMMEDIATELY redirect to password reset
-              setTimeout(() => router.push("/auth/reset-password?from=recovery"), 1000)
-              return
-            }
-
-            // Regular session handling
-            await logUserAccess(user.id, user.app_metadata?.provider || "email")
-            handleSuccess(user, "/", { ...debug, step: "existing_session" })
-            return
-          }
-
-          handleError("No authentication data found", "Please sign in again.", { ...debug, step: "no_session" })
-          setTimeout(() => router.push("/login"), 3000)
-          return
-        }
-
-        // Exchange code for session
-        console.log("AuthCallback: Exchanging code...")
-        debug.step = "code_exchange"
-
-        // Add logging for the callback URL
-        console.log("AuthCallback: Processing callback from URL:", window.location.href)
-
-        const { user, session } = await exchangeCodeForSession(code, isRecovery)
-
-        // Handle recovery flow - MUST redirect to password reset
-        if (isRecovery) {
-          console.log("AuthCallback: Processing recovery flow - redirecting to password reset")
-          debug.step = "recovery_redirect_to_reset"
-
-          if (timeoutRef.current) {
-            clearTimeout(timeoutRef.current)
-          }
-
-          setStatus("recovery")
-          setMessage("Recovery link verified! Redirecting to password reset...")
-          setDebugInfo({ ...debug, userEmail: user.email })
-
-          // IMMEDIATELY redirect to password reset - do not allow access to app
-          setTimeout(() => router.push("/auth/reset-password?from=recovery"), 1000)
-          return
-        }
-
-        // Handle regular authentication
-        console.log("AuthCallback: Processing regular auth flow")
-        debug.step = "regular_auth_success"
-
-        // Validate the user has proper access
-        if (!hasVerifiedAccess(user)) {
-          console.error("AuthCallback: User authenticated but doesn't have verified access")
-          handleError("Authentication incomplete", "Your account needs verification. Please check your email.", {
-            ...debug,
-            step: "access_verification_failed",
-            userEmail: user.email,
-            emailConfirmed: user.email_confirmed_at,
-            provider: user.app_metadata?.provider,
-          })
-          setTimeout(() => router.push("/login"), 3000)
-          return
-        }
-
-        // Log access asynchronously with profile updates
-        logUserAccess(user, user.app_metadata?.provider || "email")
-
-        handleSuccess(user, "/", { ...debug, step: "auth_complete" })
-      } catch (error) {
-        console.error("AuthCallback: Error:", error)
-        const errorMessage = error instanceof Error ? error.message : "An unexpected error occurred"
-        handleError(errorMessage, "Please try again.", {
-          ...debug,
-          step: "exception",
-          exchangeError: error as AuthError,
+        console.log("AuthCallback: Parsed parameters:", {
+          type,
+          hasError: !!error,
+          hasCode: !!code,
+          hasAccessToken: !!accessToken,
+          hasRefreshToken: !!refreshToken,
         })
-        setTimeout(() => router.push("/login"), 3000)
+
+        // Handle errors first
+        if (error) {
+          console.error("AuthCallback: Error in callback:", error, errorDescription)
+          debug.step = "callback_error"
+          debug.error = `${error}: ${errorDescription}`
+
+          if (error === "access_denied") {
+            setStatus("error")
+            setMessage("Authentication was cancelled. Please try again.")
+          } else {
+            setStatus("error")
+            setMessage(`Authentication failed: ${errorDescription || error}`)
+          }
+          setDebugInfo(debug)
+          return
+        }
+
+        debug.step = "exchanging_code"
+        console.log("AuthCallback: Exchanging code for session...")
+
+        // Exchange the code for a session
+        const { data, error: sessionError } = await supabase.auth.exchangeCodeForSession(window.location.href)
+
+        if (timeoutRef.current) {
+          clearTimeout(timeoutRef.current)
+        }
+
+        if (sessionError) {
+          console.error("AuthCallback: Session exchange error:", sessionError)
+          debug.step = "session_exchange_error"
+          debug.error = sessionError.message
+
+          // Handle specific session errors
+          switch (sessionError.message) {
+            case "Token has expired":
+            case "Signup confirmation token expired":
+              setStatus("expired")
+              setMessage("This verification link has expired. Please request a new confirmation email.")
+              break
+            case "Email link is invalid or has expired":
+              setStatus("expired")
+              setMessage("This verification link is no longer valid. Please request a new one.")
+              break
+            case "User already registered":
+            case "Email address already confirmed":
+              setStatus("already_verified")
+              setMessage("Your email has already been verified. You can sign in to your account.")
+              break
+            default:
+              setStatus("error")
+              setMessage(`Authentication failed: ${sessionError.message}`)
+          }
+
+          setDebugInfo(debug)
+          return
+        }
+
+        // Check if we have a valid session and user
+        if (!data.session || !data.user) {
+          console.error("AuthCallback: No session or user data returned")
+          debug.step = "no_session_data"
+          setStatus("error")
+          setMessage("Authentication process incomplete. Please try again or contact support.")
+          setDebugInfo(debug)
+          return
+        }
+
+        console.log("AuthCallback: Authentication successful for:", data.user.email)
+        debug.step = "auth_success"
+        debug.userEmail = data.user.email
+
+        // Determine the login method
+        const loginMethod = data.user.app_metadata?.provider === "google" ? "google" : "email"
+
+        // Log the successful authentication with profile update
+        try {
+          const { logAccessWithProfile } = await import("@/lib/auth")
+          await logAccessWithProfile(data.user, loginMethod, {
+            sessionType: type === "recovery" ? "password_recovery" : "verification",
+          })
+          debug.step = "access_logged"
+        } catch (logError) {
+          console.warn("AuthCallback: Failed to log access, but continuing:", logError)
+          // Don't fail the auth flow for logging errors
+        }
+
+        setStatus("success")
+
+        // Set appropriate success message based on type
+        if (type === "recovery") {
+          setMessage("Password reset successful! You can now access your account.")
+        } else if (loginMethod === "google") {
+          setMessage("Google sign-in successful! Welcome to the Crown Royal Strategic Report.")
+        } else {
+          setMessage("Email verified successfully! You can now access the Crown Royal Strategic Report.")
+        }
+
+        setDebugInfo(debug)
+
+        // Redirect to the main app after showing success message
+        setTimeout(() => {
+          if (type === "recovery") {
+            router.push("/auth/reset-password?verified=true")
+          } else {
+            router.push("/?verified=true")
+          }
+        }, 2000)
+      } catch (err) {
+        console.error("AuthCallback: Unexpected callback error:", err)
+
+        if (timeoutRef.current) {
+          clearTimeout(timeoutRef.current)
+        }
+
+        setStatus("error")
+        setMessage("An unexpected error occurred during authentication. Please try again.")
+        setDebugInfo({
+          ...debug,
+          step: "unexpected_error",
+          error: err instanceof Error ? err.message : String(err),
+        })
       }
     }
 
     handleAuthCallback()
 
-    // Cleanup function
+    // Cleanup timeout on unmount
     return () => {
       if (timeoutRef.current) {
         clearTimeout(timeoutRef.current)
       }
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort()
-      }
     }
-  }, [router, handleError, handleSuccess, parseUrlParameters, exchangeCodeForSession, logUserAccess])
+  }, [router])
+
+  // Resend verification email
+  const handleResendVerification = async (): Promise<void> => {
+    setIsResending(true)
+
+    try {
+      // Get current session to resend for current user
+      const { data: sessionData } = await supabase.auth.getSession()
+
+      if (!sessionData.session?.user?.email) {
+        // If no session, redirect to login/signup
+        router.push("/login?message=Please sign up again to receive a new verification email")
+        return
+      }
+
+      const { error } = await supabase.auth.resend({
+        type: "signup",
+        email: sessionData.session.user.email,
+      })
+
+      if (error) {
+        console.error("Resend error:", error)
+        setMessage("Failed to resend verification email. Please try again or contact support.")
+      } else {
+        setMessage("A new verification email has been sent. Please check your inbox.")
+      }
+    } catch (err) {
+      console.error("Resend unexpected error:", err)
+      setMessage("An error occurred while resending the email. Please try again.")
+    } finally {
+      setIsResending(false)
+    }
+  }
 
   const handleReturnToLogin = (): void => {
     router.push("/login")
+  }
+
+  const handleGoToLogin = (): void => {
+    router.push("/login?message=Please sign in with your verified account")
   }
 
   const renderStatusIcon = (): JSX.Element => {
@@ -351,8 +274,11 @@ export default function AuthCallbackPage(): JSX.Element {
       case "loading":
         return <Loader2 {...iconProps} className="h-16 w-16 text-purple-600 animate-spin" />
       case "success":
-      case "recovery":
         return <CheckCircle {...iconProps} className="h-16 w-16 text-green-600" />
+      case "already_verified":
+        return <CheckCircle {...iconProps} className="h-16 w-16 text-blue-600" />
+      case "expired":
+        return <Mail {...iconProps} className="h-16 w-16 text-orange-600" />
       case "error":
         return <AlertCircle {...iconProps} className="h-16 w-16 text-red-600" />
       default:
@@ -363,20 +289,24 @@ export default function AuthCallbackPage(): JSX.Element {
   const getStatusContent = () => {
     const baseContent = {
       loading: {
-        title: "Processing...",
-        description: "Processing your authentication...",
+        title: "Processing Authentication...",
+        description: "Please wait while we complete your authentication",
       },
       success: {
-        title: "Success!",
-        description: "Authentication completed successfully",
+        title: "Authentication Successful!",
+        description: "You have been successfully authenticated",
       },
-      recovery: {
-        title: "Password Recovery Complete!",
-        description: "Your recovery link is valid and you're now authenticated",
+      already_verified: {
+        title: "Already Verified",
+        description: "Your account has already been verified",
+      },
+      expired: {
+        title: "Link Expired",
+        description: "This authentication link has expired",
       },
       error: {
         title: "Authentication Failed",
-        description: "There was an issue with authentication",
+        description: "There was an issue with your authentication",
       },
     }
 
@@ -404,24 +334,81 @@ export default function AuthCallbackPage(): JSX.Element {
             {renderStatusIcon()}
             <p className="text-slate-600">{message}</p>
 
-            {(status === "success" || status === "recovery") && (
-              <div className="w-full bg-gray-200 rounded-full h-2">
-                <div className="bg-green-600 h-2 rounded-full transition-all duration-1000" style={{ width: "100%" }} />
-              </div>
-            )}
-
+            {/* Loading state */}
             {status === "loading" && debugInfo?.step && process.env.NODE_ENV === "development" && (
               <p className="text-xs text-slate-500">Step: {debugInfo.step}</p>
             )}
 
-            {status === "error" && (
-              <Button onClick={handleReturnToLogin} className="w-full mt-4">
-                Return to Login
+            {/* Success state with redirect indicator */}
+            {status === "success" && (
+              <>
+                <div className="w-full bg-gray-200 rounded-full h-2">
+                  <div
+                    className="bg-green-600 h-2 rounded-full transition-all duration-1000"
+                    style={{ width: "100%" }}
+                  />
+                </div>
+                <p className="text-sm text-slate-500">Redirecting...</p>
+              </>
+            )}
+
+            {/* Already verified state */}
+            {status === "already_verified" && (
+              <Button onClick={handleGoToLogin} className="w-full">
+                Go to Login
               </Button>
             )}
 
-            {(status === "success" || status === "recovery") && (
-              <p className="text-sm text-slate-500">Redirecting automatically...</p>
+            {/* Expired state with resend option */}
+            {status === "expired" && (
+              <div className="w-full space-y-3">
+                <Alert>
+                  <Mail className="h-4 w-4" />
+                  <AlertDescription>
+                    Authentication links expire for security. Request a new one below.
+                  </AlertDescription>
+                </Alert>
+                <div className="flex gap-2">
+                  <Button onClick={handleResendVerification} disabled={isResending} className="flex-1">
+                    {isResending ? (
+                      <>
+                        <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                        Sending...
+                      </>
+                    ) : (
+                      <>
+                        <Mail className="h-4 w-4 mr-2" />
+                        Resend Email
+                      </>
+                    )}
+                  </Button>
+                  <Button onClick={handleReturnToLogin} variant="outline" className="flex-1">
+                    Back to Login
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {/* Error state */}
+            {status === "error" && (
+              <div className="w-full space-y-3">
+                <Button onClick={handleResendVerification} disabled={isResending} className="w-full">
+                  {isResending ? (
+                    <>
+                      <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                      Sending New Link...
+                    </>
+                  ) : (
+                    <>
+                      <Mail className="h-4 w-4 mr-2" />
+                      Request New Verification Email
+                    </>
+                  )}
+                </Button>
+                <Button onClick={handleReturnToLogin} variant="outline" className="w-full">
+                  Return to Login
+                </Button>
+              </div>
             )}
           </div>
 
