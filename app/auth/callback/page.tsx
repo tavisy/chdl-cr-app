@@ -1,7 +1,7 @@
 "use client"
 import { useEffect, useState, useRef, useCallback } from "react"
 import { useRouter } from "next/navigation"
-import { supabase } from "@/lib/supabase"
+import { getSupabaseClient } from "@/lib/supabase"
 import { logAccess, hasVerifiedAccess } from "@/lib/auth"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { CheckCircle, AlertCircle, Loader2 } from "lucide-react"
@@ -22,6 +22,8 @@ interface DebugInfo {
   userEmail?: string
   provider?: string
   hasAccess?: boolean
+  hasCode?: boolean
+  sessionExists?: boolean
 }
 
 export default function AuthCallbackPage(): JSX.Element {
@@ -88,54 +90,48 @@ export default function AuthCallbackPage(): JSX.Element {
     }
   }, [])
 
-  // Handle both PKCE and regular code exchange
+  // Simplified code exchange that handles PKCE properly
   const exchangeCodeForSession = useCallback(async (code: string, isRecovery: boolean) => {
     try {
-      // For recovery flows, check if this is a PKCE token (starts with 'pkce_')
-      if (isRecovery && code.startsWith('pkce_')) {
-        console.log("AuthCallback: Detected PKCE recovery token, using session check instead")
-        
-        // For PKCE recovery, the user should already be signed in
-        // We just need to verify the session exists
-        const { data: sessionData, error: sessionError } = await supabase.auth.getSession()
-        
-        if (sessionError) {
-          throw new Error("Failed to retrieve recovery session. Please try again.")
-        }
-        
-        if (!sessionData.session?.user) {
-          throw new Error("Recovery session not found. Please request a new password reset.")
-        }
-        
-        return { user: sessionData.session.user, session: sessionData.session }
-      }
+      console.log(`AuthCallback: Attempting code exchange - Recovery: ${isRecovery}, Code length: ${code.length}`)
       
-      // Regular code exchange for non-PKCE flows
+      // Always attempt the standard code exchange first
+      const supabase = getSupabaseClient()
       const { data, error } = await supabase.auth.exchangeCodeForSession(code)
       
       if (error) {
-        // Handle specific Supabase error types
-        switch (error.message) {
-          case 'Invalid authorization code':
-            throw new Error(isRecovery ? 
-              "This recovery link has expired or is invalid. Please request a new password reset." :
-              "This authentication link has expired. Please sign in again.")
-          case 'Authorization code has already been used':
-            throw new Error("This link has already been used. Please request a new one.")
-          default:
-            throw new Error(isRecovery ? 
-              "Unable to process password recovery. Please try again." :
-              "Authentication failed. Please try signing in again.")
+        console.error("AuthCallback: Code exchange failed:", error.message)
+        
+        // Handle specific error cases with better messaging
+        if (error.message.includes('invalid request: both auth code and code verifier should be non-empty')) {
+          throw new Error("Authentication session expired. Please try signing in again.")
         }
+        
+        if (error.message.includes('Invalid authorization code')) {
+          throw new Error(isRecovery ? 
+            "This recovery link has expired. Please request a new password reset." :
+            "This authentication link has expired. Please sign in again.")
+        }
+        
+        if (error.message.includes('Authorization code has already been used')) {
+          throw new Error("This link has already been used. Please request a new one.")
+        }
+        
+        // Generic fallback
+        throw new Error(isRecovery ? 
+          "Unable to process password recovery. Please try again." :
+          "Authentication failed. Please try signing in again.")
       }
 
       if (!data.session?.user) {
         throw new Error("Authentication incomplete. No user session created.")
       }
 
+      console.log("AuthCallback: Code exchange successful")
       return { user: data.user, session: data.session }
+      
     } catch (error) {
-      console.error("Code exchange error:", error)
+      console.error("AuthCallback: Code exchange error:", error)
       throw error
     }
   }, [])
@@ -207,60 +203,35 @@ export default function AuthCallbackPage(): JSX.Element {
 
         debug.type = type
         debug.isRecovery = isRecovery
+        debug.hasCode = !!code
         debug.step = "params_parsed"
 
         console.log("AuthCallback: Type:", type, "Has code:", !!code)
 
-        // Handle missing code - for PKCE recovery, code might not be present
+        // For PKCE flows, we MUST have a code - no fallback to session check
         if (!code) {
-          console.log("AuthCallback: No code, checking existing session...")
-          debug.step = "no_code_check_session"
-
-          const { data: sessionData } = await supabase.auth.getSession()
-          
-          if (sessionData.session?.user) {
-            console.log("AuthCallback: Found existing session")
-            const user = sessionData.session.user
-            
-            // If this is a recovery type but no code, it might be PKCE recovery
-            if (isRecovery) {
-              console.log("AuthCallback: Recovery session without code - treating as PKCE recovery")
-              debug.step = "pkce_recovery_session"
-              
-              if (timeoutRef.current) {
-                clearTimeout(timeoutRef.current)
-              }
-
-              setStatus("recovery")
-              setMessage("Recovery link verified! Redirecting to password reset...")
-              setDebugInfo({ ...debug, userEmail: user.email })
-
-              // IMMEDIATELY redirect to password reset
-              setTimeout(() => router.push("/auth/reset-password?from=recovery"), 1000)
-              return
-            }
-            
-            // Regular session handling
-            await logUserAccess(user.id, user.app_metadata?.provider || "email")
-            handleSuccess(user, "/", { ...debug, step: "existing_session" })
-            return
-          }
-
-          handleError("No authentication data found", "Please sign in again.", { ...debug, step: "no_session" })
+          console.error("AuthCallback: Missing authorization code")
+          handleError(
+            "Missing authorization code", 
+            "Authentication link is incomplete. Please try signing in again.", 
+            { ...debug, step: "missing_code" }
+          )
           setTimeout(() => router.push("/login"), 3000)
           return
         }
 
-        // Exchange code for session
-        console.log("AuthCallback: Exchanging code...")
+        // Always exchange the code - this handles both PKCE and regular flows
+        console.log("AuthCallback: Exchanging code for session...")
         debug.step = "code_exchange"
 
         const { user, session } = await exchangeCodeForSession(code, isRecovery)
+        
+        console.log(`AuthCallback: Code exchange successful for user: ${user.email}`)
 
-        // Handle recovery flow - MUST redirect to password reset
+        // Handle recovery flow - redirect to password reset
         if (isRecovery) {
           console.log("AuthCallback: Processing recovery flow - redirecting to password reset")
-          debug.step = "recovery_redirect_to_reset"
+          debug.step = "recovery_redirect"
           
           if (timeoutRef.current) {
             clearTimeout(timeoutRef.current)
@@ -270,24 +241,42 @@ export default function AuthCallbackPage(): JSX.Element {
           setMessage("Recovery link verified! Redirecting to password reset...")
           setDebugInfo({ ...debug, userEmail: user.email })
 
-          // IMMEDIATELY redirect to password reset - do not allow access to app
+          // Redirect to password reset page
           setTimeout(() => router.push("/auth/reset-password?from=recovery"), 1000)
           return
         }
 
-        // Handle regular authentication
+        // Handle regular authentication success
         console.log("AuthCallback: Processing regular auth flow")
         debug.step = "regular_auth_success"
 
         // Log access asynchronously with profile updates
-        logUserAccess(user, user.app_metadata?.provider || "email")
+        await logUserAccess(user, user.app_metadata?.provider || "email")
 
+        // Show success message with proper provider info
+        const provider = user.app_metadata?.provider
+        let successMessage = "Authentication successful! Redirecting..."
+        
+        if (provider === "google") {
+          successMessage = "Successfully signed in with Google! Redirecting..."
+        } else if (provider === "email") {
+          successMessage = "Email verification successful! Redirecting..."
+        }
+
+        setMessage(successMessage)
         handleSuccess(user, "/", { ...debug, step: "auth_complete" })
 
       } catch (error) {
         console.error("AuthCallback: Error:", error)
         const errorMessage = error instanceof Error ? error.message : "An unexpected error occurred"
-        handleError(errorMessage, "Please try again.", { 
+        
+        // Add specific handling for PKCE errors
+        let userFriendlyMessage = errorMessage
+        if (errorMessage.includes('auth code and code verifier')) {
+          userFriendlyMessage = "Authentication session expired. Please clear your browser cache and try again."
+        }
+        
+        handleError(errorMessage, userFriendlyMessage, { 
           ...debug, 
           step: "exception",
           exchangeError: error as AuthError
@@ -387,9 +376,14 @@ export default function AuthCallbackPage(): JSX.Element {
             )}
             
             {status === "error" && (
-              <Button onClick={handleReturnToLogin} className="w-full mt-4">
-                Return to Login
-              </Button>
+              <div className="space-y-3">
+                <Button onClick={handleReturnToLogin} className="w-full">
+                  Return to Login
+                </Button>
+                <p className="text-xs text-slate-500">
+                  If this problem persists, try clearing your browser cache
+                </p>
+              </div>
             )}
             
             {(status === "success" || status === "recovery") && (

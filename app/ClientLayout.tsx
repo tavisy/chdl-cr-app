@@ -102,7 +102,7 @@ export default function ClientLayout({ children }: ClientLayoutProps): JSX.Eleme
     }
 
     return hasAccess
-  }, [user])
+  }, [user?.id, user?.email_confirmed_at, user?.app_metadata?.provider])
 
   // Add a small delay before showing loading spinner to prevent flashing
   useEffect(() => {

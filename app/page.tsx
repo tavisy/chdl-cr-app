@@ -1,5 +1,7 @@
 "use client"
 
+import type React from "react"
+
 import { useSearchParams } from "next/navigation"
 import { useEffect, useState } from "react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
@@ -10,6 +12,23 @@ import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { BarChart3, Users, Target, Lightbulb, TrendingUp, Globe, TrendingDown, BookOpen } from "lucide-react"
 import Link from "next/link"
+
+// Add proper type for the sections array
+interface Section {
+  id: string
+  title: string
+  icon: React.ComponentType<{ className?: string }>
+}
+
+const sections: Section[] = [
+  { id: "overview", title: "Executive Overview", icon: BarChart3 },
+  { id: "market", title: "Market Analysis", icon: TrendingUp },
+  { id: "consumer", title: "Consumer Insights", icon: Users },
+  { id: "competitive", title: "Competitive Landscape", icon: Target },
+  { id: "identity", title: "Canadian Identity", icon: Globe },
+  { id: "recommendations", title: "Strategic Recommendations", icon: Lightbulb },
+  { id: "references", title: "References", icon: BookOpen },
+]
 
 export default function HomePage() {
   const [activeSection, setActiveSection] = useState("overview")
@@ -27,16 +46,6 @@ export default function HomePage() {
       return () => clearTimeout(timer)
     }
   }, [searchParams])
-
-  const sections = [
-    { id: "overview", title: "Executive Overview", icon: BarChart3 },
-    { id: "market", title: "Market Analysis", icon: TrendingUp },
-    { id: "consumer", title: "Consumer Insights", icon: Users },
-    { id: "competitive", title: "Competitive Landscape", icon: Target },
-    { id: "identity", title: "Canadian Identity", icon: Globe },
-    { id: "recommendations", title: "Strategic Recommendations", icon: Lightbulb },
-    { id: "references", title: "References", icon: BookOpen },
-  ]
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
