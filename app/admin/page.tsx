@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { getSupabaseClient } from "@/lib/supabase"
+import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -22,30 +22,10 @@ import {
   RefreshCw,
 } from "lucide-react"
 
-// Add proper types at the top of the component
-interface User {
-  id: string
-  email: string
-  full_name?: string
-  created_at: string
-  last_login_at?: string
-  login_count?: number
-}
-
-interface AccessLog {
-  id: string
-  user_id: string
-  login_method: string
-  user_agent?: string
-  ip_address?: string
-  accessed_at: string
-}
-
 export default function AdminDashboard() {
-  // Update state declarations with proper types
-  const [user, setUser] = useState<any>(null)
-  const [users, setUsers] = useState<User[]>([])
-  const [accessLogs, setAccessLogs] = useState<AccessLog[]>([])
+  const [user, setUser] = useState(null)
+  const [users, setUsers] = useState([])
+  const [accessLogs, setAccessLogs] = useState([])
   const [isLoading, setIsLoading] = useState(true)
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [isAuthorized, setIsAuthorized] = useState(false)
@@ -60,10 +40,10 @@ export default function AdminDashboard() {
     emailLogins: 0,
   })
 
-  const supabase = getSupabaseClient()
+  const supabase = createClientComponentClient()
 
-  // Update getDateCutoff function with proper type
-  const getDateCutoff = (range: string): Date => {
+  // Helper function to get date cutoff based on time range
+  const getDateCutoff = (range) => {
     const now = new Date()
     switch (range) {
       case "24h":
@@ -79,13 +59,13 @@ export default function AdminDashboard() {
     }
   }
 
-  // Update helper function with proper types
-  const getUserEmail = (userId: string): string => {
+  // Helper functions defined early to avoid initialization errors
+  const getUserEmail = (userId) => {
     const user = users.find((u) => u.id === userId)
     return user?.email || `User ${userId?.substring(0, 8)}...` || "Unknown"
   }
 
-  const getDeviceType = (userAgent?: string): string => {
+  const getDeviceType = (userAgent) => {
     if (!userAgent) return "Unknown"
     if (userAgent.match(/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i)) {
       return "Mobile"
@@ -96,13 +76,13 @@ export default function AdminDashboard() {
     }
   }
 
-  const formatDate = (dateString?: string): string => {
+  const formatDate = (dateString) => {
     if (!dateString) return "N/A"
     const date = new Date(dateString)
     return date.toLocaleString()
   }
 
-  const exportCSV = (data: any[], filename: string): void => {
+  const exportCSV = (data, filename) => {
     if (!data || !data.length) return
 
     const headers = Object.keys(data[0])
@@ -259,7 +239,7 @@ export default function AdminDashboard() {
   // Client-side filtering as backup (in case API doesn't handle time filtering properly)
   const getFilteredUsers = () => {
     const dateCutoff = getDateCutoff(timeRange)
-
+    
     return users.filter((user) => {
       const matchesSearch =
         user.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -268,8 +248,10 @@ export default function AdminDashboard() {
       // Filter by creation date or last login date within time range
       const createdAt = user.created_at ? new Date(user.created_at) : null
       const lastLogin = user.last_login_at ? new Date(user.last_login_at) : null
-
-      const withinTimeRange = (createdAt && createdAt >= dateCutoff) || (lastLogin && lastLogin >= dateCutoff)
+      
+      const withinTimeRange = 
+        (createdAt && createdAt >= dateCutoff) || 
+        (lastLogin && lastLogin >= dateCutoff)
 
       return matchesSearch && withinTimeRange
     })
@@ -277,7 +259,7 @@ export default function AdminDashboard() {
 
   const getFilteredLogs = () => {
     const dateCutoff = getDateCutoff(timeRange)
-
+    
     return accessLogs.filter((log) => {
       const matchesSearch =
         log.user_agent?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -396,42 +378,42 @@ export default function AdminDashboard() {
 
       {/* Time range selector */}
       <div className="flex flex-wrap gap-2 mb-6">
-        <Button
-          variant={timeRange === "24h" ? "default" : "outline"}
+        <Button 
+          variant={timeRange === "24h" ? "default" : "outline"} 
           onClick={() => {
             console.log("Setting time range to 24h")
             setTimeRange("24h")
-          }}
+          }} 
           size="sm"
         >
           Last 24 Hours
         </Button>
-        <Button
-          variant={timeRange === "7d" ? "default" : "outline"}
+        <Button 
+          variant={timeRange === "7d" ? "default" : "outline"} 
           onClick={() => {
             console.log("Setting time range to 7d")
             setTimeRange("7d")
-          }}
+          }} 
           size="sm"
         >
           Last 7 Days
         </Button>
-        <Button
-          variant={timeRange === "30d" ? "default" : "outline"}
+        <Button 
+          variant={timeRange === "30d" ? "default" : "outline"} 
           onClick={() => {
             console.log("Setting time range to 30d")
             setTimeRange("30d")
-          }}
+          }} 
           size="sm"
         >
           Last 30 Days
         </Button>
-        <Button
-          variant={timeRange === "90d" ? "default" : "outline"}
+        <Button 
+          variant={timeRange === "90d" ? "default" : "outline"} 
           onClick={() => {
             console.log("Setting time range to 90d")
             setTimeRange("90d")
-          }}
+          }} 
           size="sm"
         >
           Last 90 Days
@@ -493,21 +475,20 @@ export default function AdminDashboard() {
               <div className="flex items-center justify-between mb-1">
                 <div className="text-sm font-medium">Google</div>
                 <div className="text-sm text-muted-foreground">
-                  {filteredLogs.length > 0
-                    ? `${Math.round((filteredLogs.filter((log) => log.login_method === "google").length / filteredLogs.length) * 100)}%`
-                    : "0%"}
+                  {filteredLogs.length > 0 
+                    ? `${Math.round((filteredLogs.filter(log => log.login_method === "google").length / filteredLogs.length) * 100)}%` 
+                    : "0%"
+                  }
                 </div>
               </div>
               <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
                 <div
                   className="h-full bg-blue-500 rounded-full"
-                  style={{
-                    width: `${
-                      filteredLogs.length > 0
-                        ? (filteredLogs.filter((log) => log.login_method === "google").length / filteredLogs.length) *
-                          100
-                        : 0
-                    }%`,
+                  style={{ 
+                    width: `${filteredLogs.length > 0 
+                      ? (filteredLogs.filter(log => log.login_method === "google").length / filteredLogs.length) * 100 
+                      : 0
+                    }%` 
                   }}
                 ></div>
               </div>
@@ -517,21 +498,20 @@ export default function AdminDashboard() {
               <div className="flex items-center justify-between mb-1">
                 <div className="text-sm font-medium">Email</div>
                 <div className="text-sm text-muted-foreground">
-                  {filteredLogs.length > 0
-                    ? `${Math.round((filteredLogs.filter((log) => log.login_method === "email").length / filteredLogs.length) * 100)}%`
-                    : "0%"}
+                  {filteredLogs.length > 0 
+                    ? `${Math.round((filteredLogs.filter(log => log.login_method === "email").length / filteredLogs.length) * 100)}%` 
+                    : "0%"
+                  }
                 </div>
               </div>
               <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
                 <div
                   className="h-full bg-green-500 rounded-full"
-                  style={{
-                    width: `${
-                      filteredLogs.length > 0
-                        ? (filteredLogs.filter((log) => log.login_method === "email").length / filteredLogs.length) *
-                          100
-                        : 0
-                    }%`,
+                  style={{ 
+                    width: `${filteredLogs.length > 0 
+                      ? (filteredLogs.filter(log => log.login_method === "email").length / filteredLogs.length) * 100 
+                      : 0
+                    }%` 
                   }}
                 ></div>
               </div>
@@ -612,9 +592,10 @@ export default function AdminDashboard() {
                     ) : (
                       <tr>
                         <td colSpan={5} className="text-center py-4">
-                          {searchTerm
-                            ? "No users match your search criteria"
-                            : `No users found in the ${timeRange} time range`}
+                          {searchTerm 
+                            ? "No users match your search criteria" 
+                            : `No users found in the ${timeRange} time range`
+                          }
                         </td>
                       </tr>
                     )}
@@ -692,9 +673,10 @@ export default function AdminDashboard() {
                     ) : (
                       <tr>
                         <td colSpan={6} className="text-center py-4">
-                          {searchTerm
-                            ? "No logs match your search criteria"
-                            : `No activity logs found in the ${timeRange} time range`}
+                          {searchTerm 
+                            ? "No logs match your search criteria" 
+                            : `No activity logs found in the ${timeRange} time range`
+                          }
                         </td>
                       </tr>
                     )}
@@ -781,9 +763,10 @@ export default function AdminDashboard() {
                       <CardContent className="pt-6">
                         <div className="text-center">
                           <div className="text-2xl font-bold mb-1">
-                            {filteredUsers.length > 0
-                              ? Math.round((filteredLogs.length / filteredUsers.length) * 100) / 100
-                              : 0}
+                            {filteredUsers.length > 0 
+                              ? Math.round(filteredLogs.length / filteredUsers.length * 100) / 100
+                              : 0
+                            }
                           </div>
                           <p className="text-sm text-muted-foreground">Avg. Logins per User</p>
                         </div>
@@ -795,8 +778,9 @@ export default function AdminDashboard() {
                         <div className="text-center">
                           <div className="text-2xl font-bold mb-1">
                             {filteredUsers.length > 0 && filteredLogs.length > 0
-                              ? `${Math.round((new Set(filteredLogs.map((log) => log.user_id)).size / filteredUsers.length) * 100)}%`
-                              : "0%"}
+                              ? `${Math.round((new Set(filteredLogs.map(log => log.user_id)).size / filteredUsers.length) * 100)}%`
+                              : "0%"
+                            }
                           </div>
                           <p className="text-sm text-muted-foreground">Active User Rate</p>
                         </div>
@@ -810,11 +794,9 @@ export default function AdminDashboard() {
                   <h3 className="text-lg font-medium mb-4">Device Usage</h3>
                   <div className="space-y-4">
                     {["Mobile", "Desktop", "Tablet", "Unknown"].map((deviceType) => {
-                      const deviceCount = filteredLogs.filter(
-                        (log) => getDeviceType(log.user_agent) === deviceType,
-                      ).length
+                      const deviceCount = filteredLogs.filter(log => getDeviceType(log.user_agent) === deviceType).length
                       const percentage = filteredLogs.length > 0 ? (deviceCount / filteredLogs.length) * 100 : 0
-
+                      
                       return (
                         <div key={deviceType}>
                           <div className="flex items-center justify-between mb-1">
@@ -831,13 +813,9 @@ export default function AdminDashboard() {
                           <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
                             <div
                               className={`h-full rounded-full ${
-                                deviceType === "Mobile"
-                                  ? "bg-purple-500"
-                                  : deviceType === "Desktop"
-                                    ? "bg-orange-500"
-                                    : deviceType === "Tablet"
-                                      ? "bg-cyan-500"
-                                      : "bg-gray-500"
+                                deviceType === "Mobile" ? "bg-purple-500" :
+                                deviceType === "Desktop" ? "bg-orange-500" :
+                                deviceType === "Tablet" ? "bg-cyan-500" : "bg-gray-500"
                               }`}
                               style={{ width: `${percentage}%` }}
                             ></div>
