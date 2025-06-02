@@ -1,8 +1,7 @@
 "use client"
 import { useEffect, useState, useRef, useCallback } from "react"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import { supabase } from "@/lib/supabase"
-import { logAccess } from "@/lib/auth"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { CheckCircle, AlertCircle, Loader2, Mail, RefreshCw } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -22,6 +21,7 @@ interface DebugInfo {
 
 export default function VerifyPage(): JSX.Element {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [status, setStatus] = useState<VerificationStatus>("loading")
   const [message, setMessage] = useState<string>("")
   const [debugInfo, setDebugInfo] = useState<DebugInfo | null>(null)
@@ -29,22 +29,35 @@ export default function VerifyPage(): JSX.Element {
   const processedRef = useRef<boolean>(false)
   const timeoutRef = useRef<NodeJS.Timeout | null>(null)
 
-  // Parse URL parameters
+  // Parse URL parameters with improved handling for Supabase redirects
   const parseUrlParameters = useCallback(() => {
     try {
-      const urlParams = new URLSearchParams(window.location.search)
-      const hashParams = new URLSearchParams(window.location.hash.substring(1))
-      
+      // Check for token in various places
+      // 1. Direct URL parameters
+      const token =
+        searchParams.get("token") ||
+        // 2. From hash fragment
+        new URLSearchParams(window.location.hash.substring(1)).get("token") ||
+        // 3. From Supabase redirect with token_hash
+        searchParams.get("token_hash")
+
+      const type =
+        searchParams.get("type") || new URLSearchParams(window.location.hash.substring(1)).get("type") || "signup" // Default to signup if not specified
+
+      console.log("Verify: Parsed parameters:", { token: !!token, type })
+
       return {
-        getParam: (key: string) => urlParams.get(key) || hashParams.get(key)
+        token,
+        type,
       }
     } catch (error) {
       console.error("Error parsing URL parameters:", error)
       return {
-        getParam: () => null
+        token: null,
+        type: null,
       }
     }
-  }, [])
+  }, [searchParams])
 
   // Handle verification process
   const verifyUser = useCallback(async (): Promise<void> => {
@@ -59,6 +72,7 @@ export default function VerifyPage(): JSX.Element {
 
     try {
       console.log("Verify: Starting email verification process...")
+      console.log("Verify: Full URL:", window.location.href)
 
       // Set timeout for verification process
       timeoutRef.current = setTimeout(() => {
@@ -69,9 +83,7 @@ export default function VerifyPage(): JSX.Element {
       }, 15000)
 
       // Parse URL parameters
-      const { getParam } = parseUrlParameters()
-      const token = getParam("token")
-      const type = getParam("type")
+      const { token, type } = parseUrlParameters()
 
       debug.token = token
       debug.type = type
@@ -88,7 +100,7 @@ export default function VerifyPage(): JSX.Element {
         return
       }
 
-      if (type !== "signup") {
+      if (type !== "signup" && type !== "email_change") {
         console.error("Verify: Invalid verification type:", type)
         setStatus("error")
         setMessage("Invalid verification link. Please request a new confirmation email.")
@@ -97,7 +109,7 @@ export default function VerifyPage(): JSX.Element {
       }
 
       debug.step = "attempting_verification"
-      console.log("Verify: Attempting to verify OTP token...")
+      console.log("Verify: Attempting to verify token...")
 
       // Verify the token using Supabase
       const { data, error } = await supabase.auth.verifyOtp({
@@ -116,23 +128,23 @@ export default function VerifyPage(): JSX.Element {
 
         // Handle specific error types
         switch (error.message) {
-          case 'Token has expired':
-          case 'Signup confirmation token expired':
+          case "Token has expired":
+          case "Signup confirmation token expired":
             setStatus("expired")
             setMessage("This verification link has expired. Please request a new confirmation email.")
             break
-          case 'Email link is invalid or has expired':
+          case "Email link is invalid or has expired":
             setStatus("expired")
             setMessage("This verification link is no longer valid. Please request a new one.")
             break
-          case 'User already registered':
-          case 'Email address already confirmed':
+          case "User already registered":
+          case "Email address already confirmed":
             setStatus("already_verified")
             setMessage("Your email has already been verified. You can sign in to your account.")
             break
           default:
             setStatus("error")
-            setMessage("Verification failed. The link may have expired or is invalid.")
+            setMessage(`Verification failed: ${error.message}`)
         }
 
         setDebugInfo(debug)
@@ -171,20 +183,19 @@ export default function VerifyPage(): JSX.Element {
       setTimeout(() => {
         router.push("/?verified=true")
       }, 3000)
-
     } catch (err) {
       console.error("Verify: Unexpected verification error:", err)
-      
+
       if (timeoutRef.current) {
         clearTimeout(timeoutRef.current)
       }
 
       setStatus("error")
       setMessage("An unexpected error occurred during verification. Please try again.")
-      setDebugInfo({ 
-        ...debug, 
+      setDebugInfo({
+        ...debug,
         step: "unexpected_error",
-        error: err instanceof Error ? err.message : String(err)
+        error: err instanceof Error ? err.message : String(err),
       })
     }
   }, [router, parseUrlParameters])
@@ -192,11 +203,11 @@ export default function VerifyPage(): JSX.Element {
   // Resend verification email
   const handleResendVerification = useCallback(async (): Promise<void> => {
     setIsResending(true)
-    
+
     try {
       // Get current session to resend for current user
       const { data: sessionData } = await supabase.auth.getSession()
-      
+
       if (!sessionData.session?.user?.email) {
         // If no session, redirect to login/signup
         router.push("/login?message=Please sign up again to receive a new verification email")
@@ -204,8 +215,8 @@ export default function VerifyPage(): JSX.Element {
       }
 
       const { error } = await supabase.auth.resend({
-        type: 'signup',
-        email: sessionData.session.user.email
+        type: "signup",
+        email: sessionData.session.user.email,
       })
 
       if (error) {
@@ -244,7 +255,7 @@ export default function VerifyPage(): JSX.Element {
 
   const renderStatusIcon = (): JSX.Element => {
     const iconProps = { className: "h-16 w-16" }
-    
+
     switch (status) {
       case "loading":
         return <Loader2 {...iconProps} className="h-16 w-16 text-purple-600 animate-spin" />
@@ -265,24 +276,24 @@ export default function VerifyPage(): JSX.Element {
     const baseContent = {
       loading: {
         title: "Verifying Email...",
-        description: "Please wait while we verify your email address"
+        description: "Please wait while we verify your email address",
       },
       success: {
         title: "Email Verified!",
-        description: "Your account has been successfully verified"
+        description: "Your account has been successfully verified",
       },
       already_verified: {
         title: "Already Verified",
-        description: "Your email address has already been confirmed"
+        description: "Your email address has already been confirmed",
       },
       expired: {
         title: "Link Expired",
-        description: "This verification link has expired"
+        description: "This verification link has expired",
       },
       error: {
         title: "Verification Failed",
-        description: "There was an issue verifying your email"
-      }
+        description: "There was an issue verifying your email",
+      },
     }
 
     return baseContent[status] || baseContent.loading
@@ -303,52 +314,46 @@ export default function VerifyPage(): JSX.Element {
           <CardTitle className="text-2xl font-bold">{title}</CardTitle>
           <CardDescription>{description}</CardDescription>
         </CardHeader>
-        
+
         <CardContent className="text-center">
           <div className="flex flex-col items-center space-y-4">
             {renderStatusIcon()}
             <p className="text-slate-600">{message}</p>
-            
+
             {/* Loading state */}
             {status === "loading" && debugInfo?.step && process.env.NODE_ENV === "development" && (
               <p className="text-xs text-slate-500">Step: {debugInfo.step}</p>
             )}
-            
+
             {/* Success state with redirect indicator */}
             {status === "success" && (
               <>
                 <div className="w-full bg-gray-200 rounded-full h-2">
-                  <div 
-                    className="bg-green-600 h-2 rounded-full transition-all duration-1000" 
+                  <div
+                    className="bg-green-600 h-2 rounded-full transition-all duration-1000"
                     style={{ width: "100%" }}
                   />
                 </div>
                 <p className="text-sm text-slate-500">Redirecting to the report...</p>
               </>
             )}
-            
+
             {/* Already verified state */}
             {status === "already_verified" && (
               <Button onClick={handleGoToLogin} className="w-full">
                 Go to Login
               </Button>
             )}
-            
+
             {/* Expired state with resend option */}
             {status === "expired" && (
               <div className="w-full space-y-3">
                 <Alert>
                   <Mail className="h-4 w-4" />
-                  <AlertDescription>
-                    Verification links expire for security. Request a new one below.
-                  </AlertDescription>
+                  <AlertDescription>Verification links expire for security. Request a new one below.</AlertDescription>
                 </Alert>
                 <div className="flex gap-2">
-                  <Button 
-                    onClick={handleResendVerification} 
-                    disabled={isResending}
-                    className="flex-1"
-                  >
+                  <Button onClick={handleResendVerification} disabled={isResending} className="flex-1">
                     {isResending ? (
                       <>
                         <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
@@ -367,7 +372,7 @@ export default function VerifyPage(): JSX.Element {
                 </div>
               </div>
             )}
-            
+
             {/* Error state */}
             {status === "error" && (
               <div className="w-full space-y-3">
@@ -398,9 +403,7 @@ export default function VerifyPage(): JSX.Element {
                 Debug Information
               </summary>
               <div className="mt-2 p-3 bg-gray-100 rounded text-xs overflow-auto max-h-60">
-                <pre className="whitespace-pre-wrap">
-                  {JSON.stringify(debugInfo, null, 2)}
-                </pre>
+                <pre className="whitespace-pre-wrap">{JSON.stringify(debugInfo, null, 2)}</pre>
               </div>
             </details>
           )}
