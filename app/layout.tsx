@@ -4,7 +4,8 @@ import { Inter } from "next/font/google"
 import { ThemeProvider } from "@/components/theme-provider"
 import ClientLayout from "./ClientLayout"
 import { ClarityProvider } from "@/components/ClarityProvider"
-import Script from "next/script"
+import FathomAnalytics from "@/components/FathomAnalytics"
+import { Suspense } from "react"
 
 const inter = Inter({ subsets: ["latin"] })
 
@@ -24,11 +25,11 @@ export default function RootLayout({
       <body className={inter.className}>
         <ThemeProvider attribute="class" defaultTheme="light" enableSystem>
           <ClarityProvider />
-          <ClientLayout>{children}</ClientLayout>
+          <FathomAnalytics />
+          <Suspense>
+            <ClientLayout>{children}</ClientLayout>
+          </Suspense>
         </ThemeProvider>
-
-        {/* Fathom Analytics */}
-        <Script src="https://cdn.usefathom.com/script.js" data-site="DMVNNXHT" defer strategy="afterInteractive" />
       </body>
     </html>
   )
