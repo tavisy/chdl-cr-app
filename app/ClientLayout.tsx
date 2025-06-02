@@ -88,21 +88,21 @@ export default function ClientLayout({ children }: ClientLayoutProps): JSX.Eleme
   // Memoized access check that only recalculates when user changes
   const userHasAccess = useMemo(() => {
     if (!user) return false
-    
+
     const hasAccess = hasVerifiedAccess(user)
-    
+
     // Only log access check in ClientLayout when there's a significant change
     if (process.env.NODE_ENV === "development") {
       console.log("ClientLayout: User access check:", {
         email: user?.email,
         provider: user?.app_metadata?.provider,
         emailConfirmed: user?.email_confirmed_at,
-        hasAccess
+        hasAccess,
       })
     }
-    
+
     return hasAccess
-  }, [user?.id, user?.email_confirmed_at, user?.app_metadata?.provider])
+  }, [user])
 
   // Add a small delay before showing loading spinner to prevent flashing
   useEffect(() => {
@@ -160,16 +160,16 @@ export default function ClientLayout({ children }: ClientLayoutProps): JSX.Eleme
     if (!authInitialized) {
       initializeAuth()
     }
-  }, [authInitialized]) // Only depend on authInitialized
+  }, [authInitialized])
 
   // Handle redirects ONLY after auth is initialized
   useEffect(() => {
     if (!authInitialized || loading) return
 
-    console.log("ClientLayout: Checking redirects...", { 
-      user: user ? 'present' : 'null', 
-      isPublicPage, 
-      pathname 
+    console.log("ClientLayout: Checking redirects...", {
+      user: user ? "present" : "null",
+      isPublicPage,
+      pathname,
     })
 
     // Redirect unauthenticated users from protected pages
@@ -185,12 +185,12 @@ export default function ClientLayout({ children }: ClientLayoutProps): JSX.Eleme
       router.push("/")
       return
     }
-  }, [user?.id, authInitialized, loading, isPublicPage, pathname, router])
+  }, [user, authInitialized, loading, isPublicPage, pathname, router])
 
   // Auth state change listener - optimized with change detection
   useEffect(() => {
     console.log("ClientLayout: Setting up auth state listener...")
-    
+
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, session) => {
@@ -200,12 +200,12 @@ export default function ClientLayout({ children }: ClientLayoutProps): JSX.Eleme
         if (session?.user) {
           // Only update if user actually changed
           const userChanged = !user || session.user.id !== user.id
-          
+
           if (userChanged) {
             console.log("ClientLayout: Updating user from auth state change")
             setUser(session.user)
           }
-          
+
           // If we weren't initialized yet, mark as initialized
           if (!authInitialized) {
             setAuthInitialized(true)
@@ -288,7 +288,8 @@ export default function ClientLayout({ children }: ClientLayoutProps): JSX.Eleme
           <p className="mt-4 text-slate-600">Loading...</p>
           {process.env.NODE_ENV === "development" && (
             <div className="mt-2 text-xs text-slate-500">
-              Debug: loading={loading.toString()}, authInitialized={authInitialized.toString()}, user={user ? 'present' : 'null'}
+              Debug: loading={loading.toString()}, authInitialized={authInitialized.toString()}, user=
+              {user ? "present" : "null"}
             </div>
           )}
         </div>
@@ -336,12 +337,7 @@ export default function ClientLayout({ children }: ClientLayoutProps): JSX.Eleme
               </p>
             </div>
 
-            <Button 
-              onClick={handleResendConfirmation} 
-              disabled={resendLoading} 
-              variant="outline" 
-              className="w-full"
-            >
+            <Button onClick={handleResendConfirmation} disabled={resendLoading} variant="outline" className="w-full">
               <Mail className="mr-2 h-4 w-4" />
               {resendLoading ? "Sending..." : "Resend Verification Email"}
             </Button>
@@ -416,9 +412,9 @@ export default function ClientLayout({ children }: ClientLayoutProps): JSX.Eleme
             </div>
 
             {/* Mobile menu button */}
-            <button 
-              onClick={toggleMobileMenu} 
-              className="md:hidden flex flex-col gap-1 p-2" 
+            <button
+              onClick={toggleMobileMenu}
+              className="md:hidden flex flex-col gap-1 p-2"
               aria-label="Toggle menu"
               type="button"
             >
@@ -434,11 +430,7 @@ export default function ClientLayout({ children }: ClientLayoutProps): JSX.Eleme
             {/* Desktop navigation */}
             <div className="hidden md:flex items-center gap-6 text-sm">
               {navLinks.map(({ href, label }: NavLink) => (
-                <Link 
-                  key={href} 
-                  href={href} 
-                  className="text-slate-600 hover:text-slate-900 transition-colors"
-                >
+                <Link key={href} href={href} className="text-slate-600 hover:text-slate-900 transition-colors">
                   {label}
                 </Link>
               ))}

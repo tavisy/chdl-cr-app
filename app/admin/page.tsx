@@ -42,6 +42,23 @@ export default function AdminDashboard() {
 
   const supabase = createClientComponentClient()
 
+  // Helper function to get date cutoff based on time range
+  const getDateCutoff = (range) => {
+    const now = new Date()
+    switch (range) {
+      case "24h":
+        return new Date(now.getTime() - 24 * 60 * 60 * 1000)
+      case "7d":
+        return new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
+      case "30d":
+        return new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
+      case "90d":
+        return new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000)
+      default:
+        return new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
+    }
+  }
+
   // Helper functions defined early to avoid initialization errors
   const getUserEmail = (userId) => {
     const user = users.find((u) => u.id === userId)
@@ -121,10 +138,11 @@ export default function AdminDashboard() {
         // Check if user is admin
         const isAdmin =
           currentUser.email?.includes("@carterhales") ||
-          currentUser.email?.includes("@bignerd") ||
+          currentUser.email?.includes("@bignerdsolutions") ||
           currentUser.email?.includes("admin") ||
           currentUser.email === "tavis@gmail.com" ||
-          currentUser.email === "tav@bignerdlsolutions.com"
+          currentUser.email === "tavis@carterhales.com" ||
+          currentUser.email === "tav@bignerdsolutions.com"
 
         console.log("Is admin:", isAdmin, "Email:", currentUser.email)
 
@@ -155,8 +173,8 @@ export default function AdminDashboard() {
       setIsRefreshing(true)
       console.log("Loading dashboard data via API...")
 
-      // Fetch users via admin API (bypasses RLS)
-      const usersResponse = await fetch("/api/admin/users")
+      // Fetch users via admin API (bypasses RLS) - include time range parameter
+      const usersResponse = await fetch(`/api/admin/users?timeRange=${timeRange}`)
       if (!usersResponse.ok) {
         throw new Error(`Users API error: ${usersResponse.status}`)
       }
@@ -213,24 +231,52 @@ export default function AdminDashboard() {
   // Reload data when time range changes
   useEffect(() => {
     if (isAuthorized && !isLoading) {
+      console.log("Time range changed to:", timeRange, "- reloading data...")
       loadDashboardData()
     }
-  }, [timeRange])
+  }, [timeRange, isAuthorized])
 
-  // Filter users based on search term
-  const filteredUsers = users.filter(
-    (user) =>
-      user.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      user.full_name?.toLowerCase().includes(searchTerm.toLowerCase()),
-  )
+  // Client-side filtering as backup (in case API doesn't handle time filtering properly)
+  const getFilteredUsers = () => {
+    const dateCutoff = getDateCutoff(timeRange)
+    
+    return users.filter((user) => {
+      const matchesSearch =
+        user.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        user.full_name?.toLowerCase().includes(searchTerm.toLowerCase())
 
-  // Filter logs based on search term
-  const filteredLogs = accessLogs.filter(
-    (log) =>
-      log.user_agent?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      log.login_method?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      getUserEmail(log.user_id)?.toLowerCase().includes(searchTerm.toLowerCase()),
-  )
+      // Filter by creation date or last login date within time range
+      const createdAt = user.created_at ? new Date(user.created_at) : null
+      const lastLogin = user.last_login_at ? new Date(user.last_login_at) : null
+      
+      const withinTimeRange = 
+        (createdAt && createdAt >= dateCutoff) || 
+        (lastLogin && lastLogin >= dateCutoff)
+
+      return matchesSearch && withinTimeRange
+    })
+  }
+
+  const getFilteredLogs = () => {
+    const dateCutoff = getDateCutoff(timeRange)
+    
+    return accessLogs.filter((log) => {
+      const matchesSearch =
+        log.user_agent?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        log.login_method?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        getUserEmail(log.user_id)?.toLowerCase().includes(searchTerm.toLowerCase())
+
+      // Filter by access date within time range
+      const accessedAt = log.accessed_at ? new Date(log.accessed_at) : null
+      const withinTimeRange = accessedAt && accessedAt >= dateCutoff
+
+      return matchesSearch && withinTimeRange
+    })
+  }
+
+  // Get filtered data
+  const filteredUsers = getFilteredUsers()
+  const filteredLogs = getFilteredLogs()
 
   // Show loading state
   if (isLoading) {
@@ -309,16 +355,22 @@ export default function AdminDashboard() {
         <CardContent className="text-sm">
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <strong>Users Table Records:</strong> {users.length}
+              <strong>Total Users (All Time):</strong> {users.length}
             </div>
             <div>
-              <strong>Access Logs Records:</strong> {accessLogs.length}
+              <strong>Filtered Users ({timeRange}):</strong> {filteredUsers.length}
+            </div>
+            <div>
+              <strong>Total Access Logs (All Time):</strong> {accessLogs.length}
+            </div>
+            <div>
+              <strong>Filtered Access Logs ({timeRange}):</strong> {filteredLogs.length}
             </div>
             <div>
               <strong>Time Range:</strong> {timeRange}
             </div>
             <div>
-              <strong>Unique Log Users:</strong> {new Set(accessLogs.map((log) => log.user_id)).size}
+              <strong>Date Cutoff:</strong> {getDateCutoff(timeRange).toLocaleString()}
             </div>
           </div>
         </CardContent>
@@ -326,46 +378,74 @@ export default function AdminDashboard() {
 
       {/* Time range selector */}
       <div className="flex flex-wrap gap-2 mb-6">
-        <Button variant={timeRange === "24h" ? "default" : "outline"} onClick={() => setTimeRange("24h")} size="sm">
+        <Button 
+          variant={timeRange === "24h" ? "default" : "outline"} 
+          onClick={() => {
+            console.log("Setting time range to 24h")
+            setTimeRange("24h")
+          }} 
+          size="sm"
+        >
           Last 24 Hours
         </Button>
-        <Button variant={timeRange === "7d" ? "default" : "outline"} onClick={() => setTimeRange("7d")} size="sm">
+        <Button 
+          variant={timeRange === "7d" ? "default" : "outline"} 
+          onClick={() => {
+            console.log("Setting time range to 7d")
+            setTimeRange("7d")
+          }} 
+          size="sm"
+        >
           Last 7 Days
         </Button>
-        <Button variant={timeRange === "30d" ? "default" : "outline"} onClick={() => setTimeRange("30d")} size="sm">
+        <Button 
+          variant={timeRange === "30d" ? "default" : "outline"} 
+          onClick={() => {
+            console.log("Setting time range to 30d")
+            setTimeRange("30d")
+          }} 
+          size="sm"
+        >
           Last 30 Days
         </Button>
-        <Button variant={timeRange === "90d" ? "default" : "outline"} onClick={() => setTimeRange("90d")} size="sm">
+        <Button 
+          variant={timeRange === "90d" ? "default" : "outline"} 
+          onClick={() => {
+            console.log("Setting time range to 90d")
+            setTimeRange("90d")
+          }} 
+          size="sm"
+        >
           Last 90 Days
         </Button>
       </div>
 
-      {/* Stats cards */}
+      {/* Stats cards - now showing filtered data */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Total Users</CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">Users ({timeRange})</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.totalUsers}</div>
+            <div className="text-2xl font-bold">{filteredUsers.length}</div>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Total Logins</CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">Logins ({timeRange})</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.totalLogins}</div>
+            <div className="text-2xl font-bold">{filteredLogs.length}</div>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Unique Visitors</CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">Unique Visitors ({timeRange})</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.uniqueVisitors}</div>
+            <div className="text-2xl font-bold">{new Set(filteredLogs.map((log) => log.user_id)).size}</div>
           </CardContent>
         </Card>
 
@@ -375,18 +455,18 @@ export default function AdminDashboard() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {stats.totalUsers > 0 && stats.uniqueVisitors > 0
-                ? `${Math.round((stats.uniqueVisitors / stats.totalUsers) * 100)}%`
+              {filteredUsers.length > 0 && filteredLogs.length > 0
+                ? `${Math.round((new Set(filteredLogs.map((log) => log.user_id)).size / filteredUsers.length) * 100)}%`
                 : "0%"}
             </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Login methods visualization */}
+      {/* Login methods visualization - based on filtered logs */}
       <Card className="mb-6">
         <CardHeader>
-          <CardTitle>Login Methods</CardTitle>
+          <CardTitle>Login Methods ({timeRange})</CardTitle>
           <CardDescription>Distribution of authentication methods used</CardDescription>
         </CardHeader>
         <CardContent>
@@ -395,13 +475,21 @@ export default function AdminDashboard() {
               <div className="flex items-center justify-between mb-1">
                 <div className="text-sm font-medium">Google</div>
                 <div className="text-sm text-muted-foreground">
-                  {stats.totalLogins > 0 ? `${Math.round((stats.googleLogins / stats.totalLogins) * 100)}%` : "0%"}
+                  {filteredLogs.length > 0 
+                    ? `${Math.round((filteredLogs.filter(log => log.login_method === "google").length / filteredLogs.length) * 100)}%` 
+                    : "0%"
+                  }
                 </div>
               </div>
               <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
                 <div
                   className="h-full bg-blue-500 rounded-full"
-                  style={{ width: `${stats.totalLogins > 0 ? (stats.googleLogins / stats.totalLogins) * 100 : 0}%` }}
+                  style={{ 
+                    width: `${filteredLogs.length > 0 
+                      ? (filteredLogs.filter(log => log.login_method === "google").length / filteredLogs.length) * 100 
+                      : 0
+                    }%` 
+                  }}
                 ></div>
               </div>
             </div>
@@ -410,13 +498,21 @@ export default function AdminDashboard() {
               <div className="flex items-center justify-between mb-1">
                 <div className="text-sm font-medium">Email</div>
                 <div className="text-sm text-muted-foreground">
-                  {stats.totalLogins > 0 ? `${Math.round((stats.emailLogins / stats.totalLogins) * 100)}%` : "0%"}
+                  {filteredLogs.length > 0 
+                    ? `${Math.round((filteredLogs.filter(log => log.login_method === "email").length / filteredLogs.length) * 100)}%` 
+                    : "0%"
+                  }
                 </div>
               </div>
               <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
                 <div
                   className="h-full bg-green-500 rounded-full"
-                  style={{ width: `${stats.totalLogins > 0 ? (stats.emailLogins / stats.totalLogins) * 100 : 0}%` }}
+                  style={{ 
+                    width: `${filteredLogs.length > 0 
+                      ? (filteredLogs.filter(log => log.login_method === "email").length / filteredLogs.length) * 100 
+                      : 0
+                    }%` 
+                  }}
                 ></div>
               </div>
             </div>
@@ -440,11 +536,11 @@ export default function AdminDashboard() {
         <TabsList className="mb-4">
           <TabsTrigger value="users" className="flex items-center gap-2">
             <Users size={16} />
-            <span>Users</span>
+            <span>Users ({filteredUsers.length})</span>
           </TabsTrigger>
           <TabsTrigger value="activity" className="flex items-center gap-2">
             <Activity size={16} />
-            <span>Activity Logs</span>
+            <span>Activity Logs ({filteredLogs.length})</span>
           </TabsTrigger>
           <TabsTrigger value="analytics" className="flex items-center gap-2">
             <BarChart3 size={16} />
@@ -458,12 +554,12 @@ export default function AdminDashboard() {
             <CardHeader className="flex flex-row items-center justify-between">
               <div>
                 <CardTitle>Users ({filteredUsers.length})</CardTitle>
-                <CardDescription>Manage user accounts and profiles</CardDescription>
+                <CardDescription>Users active in the selected time range</CardDescription>
               </div>
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => exportCSV(users, "users-export")}
+                onClick={() => exportCSV(filteredUsers, `users-export-${timeRange}`)}
                 className="flex items-center gap-2"
               >
                 <Download size={16} />
@@ -496,7 +592,10 @@ export default function AdminDashboard() {
                     ) : (
                       <tr>
                         <td colSpan={5} className="text-center py-4">
-                          {searchTerm ? "No users match your search" : "No users found"}
+                          {searchTerm 
+                            ? "No users match your search criteria" 
+                            : `No users found in the ${timeRange} time range`
+                          }
                         </td>
                       </tr>
                     )}
@@ -513,12 +612,12 @@ export default function AdminDashboard() {
             <CardHeader className="flex flex-row items-center justify-between">
               <div>
                 <CardTitle>Activity Logs ({filteredLogs.length})</CardTitle>
-                <CardDescription>User login and access history</CardDescription>
+                <CardDescription>User login and access history for {timeRange}</CardDescription>
               </div>
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => exportCSV(accessLogs, "access-logs-export")}
+                onClick={() => exportCSV(filteredLogs, `access-logs-export-${timeRange}`)}
                 className="flex items-center gap-2"
               >
                 <Download size={16} />
@@ -533,6 +632,7 @@ export default function AdminDashboard() {
                       <th className="text-left py-3 px-4 font-medium">User</th>
                       <th className="text-left py-3 px-4 font-medium">Auth Method</th>
                       <th className="text-left py-3 px-4 font-medium">Device</th>
+                      <th className="text-left py-3 px-4 font-medium">User Agent</th>
                       <th className="text-left py-3 px-4 font-medium">IP Address</th>
                       <th className="text-left py-3 px-4 font-medium">Timestamp</th>
                     </tr>
@@ -561,14 +661,22 @@ export default function AdminDashboard() {
                               <span>{getDeviceType(log.user_agent)}</span>
                             </div>
                           </td>
+                          <td className="py-3 px-4">
+                            <div className="max-w-xs truncate text-xs text-muted-foreground" title={log.user_agent}>
+                              {log.user_agent || "N/A"}
+                            </div>
+                          </td>
                           <td className="py-3 px-4">{log.ip_address || "N/A"}</td>
                           <td className="py-3 px-4">{formatDate(log.accessed_at)}</td>
                         </tr>
                       ))
                     ) : (
                       <tr>
-                        <td colSpan={5} className="text-center py-4">
-                          {searchTerm ? "No logs match your search" : "No activity logs found"}
+                        <td colSpan={6} className="text-center py-4">
+                          {searchTerm 
+                            ? "No logs match your search criteria" 
+                            : `No activity logs found in the ${timeRange} time range`
+                          }
                         </td>
                       </tr>
                     )}
@@ -583,16 +691,16 @@ export default function AdminDashboard() {
         <TabsContent value="analytics">
           <Card>
             <CardHeader>
-              <CardTitle>Analytics</CardTitle>
+              <CardTitle>Analytics ({timeRange})</CardTitle>
               <CardDescription>User engagement and system metrics</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="space-y-8">
-                {/* Recent activity feed */}
+                {/* Recent activity feed - showing filtered logs */}
                 <div>
                   <h3 className="text-lg font-medium mb-4">Recent Activity</h3>
                   <div className="space-y-4">
-                    {accessLogs.slice(0, 5).map((log) => (
+                    {filteredLogs.slice(0, 5).map((log) => (
                       <div key={log.id} className="flex items-start gap-4">
                         <div className="bg-slate-100 p-2 rounded-full">
                           <Calendar size={16} />
@@ -606,8 +714,10 @@ export default function AdminDashboard() {
                       </div>
                     ))}
 
-                    {accessLogs.length === 0 && (
-                      <div className="text-center py-4 text-muted-foreground">No recent activity to display</div>
+                    {filteredLogs.length === 0 && (
+                      <div className="text-center py-4 text-muted-foreground">
+                        No recent activity to display for {timeRange}
+                      </div>
                     )}
                   </div>
                 </div>
@@ -642,6 +752,77 @@ export default function AdminDashboard() {
                         </div>
                       </CardContent>
                     </Card>
+                  </div>
+                </div>
+
+                {/* User engagement metrics */}
+                <div>
+                  <h3 className="text-lg font-medium mb-4">User Engagement</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <Card>
+                      <CardContent className="pt-6">
+                        <div className="text-center">
+                          <div className="text-2xl font-bold mb-1">
+                            {filteredUsers.length > 0 
+                              ? Math.round(filteredLogs.length / filteredUsers.length * 100) / 100
+                              : 0
+                            }
+                          </div>
+                          <p className="text-sm text-muted-foreground">Avg. Logins per User</p>
+                        </div>
+                      </CardContent>
+                    </Card>
+
+                    <Card>
+                      <CardContent className="pt-6">
+                        <div className="text-center">
+                          <div className="text-2xl font-bold mb-1">
+                            {filteredUsers.length > 0 && filteredLogs.length > 0
+                              ? `${Math.round((new Set(filteredLogs.map(log => log.user_id)).size / filteredUsers.length) * 100)}%`
+                              : "0%"
+                            }
+                          </div>
+                          <p className="text-sm text-muted-foreground">Active User Rate</p>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </div>
+                </div>
+
+                {/* Device breakdown */}
+                <div>
+                  <h3 className="text-lg font-medium mb-4">Device Usage</h3>
+                  <div className="space-y-4">
+                    {["Mobile", "Desktop", "Tablet", "Unknown"].map((deviceType) => {
+                      const deviceCount = filteredLogs.filter(log => getDeviceType(log.user_agent) === deviceType).length
+                      const percentage = filteredLogs.length > 0 ? (deviceCount / filteredLogs.length) * 100 : 0
+                      
+                      return (
+                        <div key={deviceType}>
+                          <div className="flex items-center justify-between mb-1">
+                            <div className="text-sm font-medium flex items-center gap-2">
+                              {deviceType === "Mobile" && <Smartphone size={14} />}
+                              {deviceType === "Desktop" && <Laptop size={14} />}
+                              {deviceType === "Unknown" && <Info size={14} />}
+                              {deviceType}
+                            </div>
+                            <div className="text-sm text-muted-foreground">
+                              {Math.round(percentage)}% ({deviceCount})
+                            </div>
+                          </div>
+                          <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+                            <div
+                              className={`h-full rounded-full ${
+                                deviceType === "Mobile" ? "bg-purple-500" :
+                                deviceType === "Desktop" ? "bg-orange-500" :
+                                deviceType === "Tablet" ? "bg-cyan-500" : "bg-gray-500"
+                              }`}
+                              style={{ width: `${percentage}%` }}
+                            ></div>
+                          </div>
+                        </div>
+                      )
+                    })}
                   </div>
                 </div>
               </div>

@@ -63,6 +63,11 @@ export default function HomePage() {
       {/* Hero Section */}
       <div className="relative bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 text-white">
         <div className="absolute inset-0 bg-black/20"></div>
+        <img
+          src="/placeholder.svg?height=400&width=800"
+          alt="Crown Royal Distillery"
+          className="absolute inset-0 w-full h-full object-cover opacity-20"
+        />
         <div className="relative container mx-auto px-6 py-24">
           <div className="max-w-4xl mx-auto text-center">
             <Badge className="mb-6 bg-amber-600 hover:bg-amber-700 text-white px-4 py-2">
