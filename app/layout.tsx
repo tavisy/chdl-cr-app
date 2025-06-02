@@ -12,7 +12,7 @@ const inter = Inter({ subsets: ["latin"] })
 export const metadata = {
   title: "Crown Royal Strategic Report",
   description: "Charting a Course for Premiumization and Bourbon Enthusiast Engagement",
-    generator: 'v0.dev'
+  generator: "v0.dev",
 }
 
 export default function RootLayout({
@@ -25,10 +25,10 @@ export default function RootLayout({
       <body className={inter.className}>
         <ThemeProvider attribute="class" defaultTheme="light" enableSystem>
           <ClarityProvider />
-          <FathomAnalytics />
-          <Suspense>
-            <ClientLayout>{children}</ClientLayout>
+          <Suspense fallback={null}>
+            <FathomAnalytics />
           </Suspense>
+          <ClientLayout>{children}</ClientLayout>
         </ThemeProvider>
       </body>
     </html>
