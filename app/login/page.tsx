@@ -350,7 +350,7 @@ export default function LoginPage(): JSX.Element {
 
     try {
       const { error } = await supabase.auth.resetPasswordForEmail(forgotPasswordEmail, {
-        redirectTo: `${window.location.origin}/auth/callback?type=recovery`,
+        redirectTo: `https://auth.kongzilla.carterhales.com/auth/v1/callback?type=recovery`,
       })
 
       if (error) {

@@ -293,7 +293,7 @@ export async function sendPasswordReset(email: string): Promise<{ error?: any }>
     console.log("Sending password reset email for:", email)
 
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/auth/callback?type=recovery`,
+      redirectTo: `https://auth.kongzilla.carterhales.com/auth/v1/callback?type=recovery`,
     })
 
     if (error) {
@@ -327,7 +327,7 @@ export async function signUpWithEmail(
         data: {
           full_name: metadata?.fullName || null,
         },
-        emailRedirectTo: `${window.location.origin}/auth/verify`,
+        emailRedirectTo: `https://auth.kongzilla.carterhales.com/auth/v1/callback`,
       },
     })
 
@@ -395,7 +395,12 @@ export async function signInWithGoogle(): Promise<{ error?: any }> {
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
+        // Use the auth subdomain for the callback
+        redirectTo: `https://auth.kongzilla.carterhales.com/auth/v1/callback`,
+        queryParams: {
+          access_type: "offline",
+          prompt: "consent",
+        },
       },
     })
 

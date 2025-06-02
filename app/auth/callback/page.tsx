@@ -270,6 +270,9 @@ export default function AuthCallbackPage(): JSX.Element {
         console.log("AuthCallback: Exchanging code...")
         debug.step = "code_exchange"
 
+        // Add logging for the callback URL
+        console.log("AuthCallback: Processing callback from URL:", window.location.href)
+
         const { user, session } = await exchangeCodeForSession(code, isRecovery)
 
         // Handle recovery flow - MUST redirect to password reset
