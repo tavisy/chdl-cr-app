@@ -15,6 +15,10 @@ export const metadata = {
   generator: "v0.dev",
 }
 
+function AnalyticsErrorBoundary({ children }: { children: React.ReactNode }) {
+  return <Suspense fallback={null}>{children}</Suspense>
+}
+
 export default function RootLayout({
   children,
 }: {
@@ -25,9 +29,9 @@ export default function RootLayout({
       <body className={inter.className}>
         <ThemeProvider attribute="class" defaultTheme="light" enableSystem>
           <ClarityProvider />
-          <Suspense fallback={null}>
+          <AnalyticsErrorBoundary>
             <FathomAnalytics />
-          </Suspense>
+          </AnalyticsErrorBoundary>
           <ClientLayout>{children}</ClientLayout>
         </ThemeProvider>
       </body>

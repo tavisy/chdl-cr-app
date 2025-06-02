@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect } from "react"
+import { useEffect, useState } from "react"
 import { usePathname, useSearchParams } from "next/navigation"
 
 declare global {
@@ -14,36 +14,52 @@ declare global {
 export default function FathomAnalytics() {
   const pathname = usePathname()
   const searchParams = useSearchParams()
+  const [fathomLoaded, setFathomLoaded] = useState(false)
 
+  // Load Fathom script only once
   useEffect(() => {
-    // Load Fathom script
-    const script = document.createElement("script")
-    script.src = "https://cdn.usefathom.com/script.js"
-    script.setAttribute("data-site", process.env.NEXT_PUBLIC_FATHOM_SITE_ID || "DMVNNXHT")
-    script.setAttribute("data-auto", "false")
-    script.defer = true
+    // Check if script is already loaded
+    if (document.querySelector("script[data-site]")) {
+      setFathomLoaded(true)
+      return
+    }
 
-    document.head.appendChild(script)
+    try {
+      const script = document.createElement("script")
+      script.src = "https://cdn.usefathom.com/script.js"
+      script.setAttribute("data-site", process.env.NEXT_PUBLIC_FATHOM_SITE_ID || "DMVNNXHT")
+      script.setAttribute("data-auto", "false")
+      script.defer = true
 
-    return () => {
-      // Cleanup script on unmount
-      if (document.head.contains(script)) {
-        document.head.removeChild(script)
+      script.onload = () => {
+        setFathomLoaded(true)
       }
+
+      document.head.appendChild(script)
+
+      return () => {
+        // Cleanup script on unmount
+        if (document.head.contains(script)) {
+          document.head.removeChild(script)
+        }
+      }
+    } catch (error) {
+      console.error("Failed to load Fathom:", error)
     }
   }, [])
 
+  // Track page views
   useEffect(() => {
-    if (!pathname) return
+    if (!pathname || !fathomLoaded) return
 
     const trackPageview = () => {
-      if (window.fathom) {
-        const url = pathname + (searchParams?.toString() ? `?${searchParams.toString()}` : "")
-        window.fathom.trackPageview({ url })
-        console.log("Fathom tracking page:", url) // Debug log
-      } else {
-        // Retry if fathom isn't loaded yet
-        setTimeout(trackPageview, 100)
+      try {
+        if (window.fathom) {
+          const url = pathname + (searchParams?.toString() ? `?${searchParams.toString()}` : "")
+          window.fathom.trackPageview({ url })
+        }
+      } catch (error) {
+        console.error("Failed to track pageview:", error)
       }
     }
 
@@ -51,7 +67,7 @@ export default function FathomAnalytics() {
     const timer = setTimeout(trackPageview, 200)
 
     return () => clearTimeout(timer)
-  }, [pathname, searchParams])
+  }, [pathname, searchParams, fathomLoaded])
 
   return null
 }

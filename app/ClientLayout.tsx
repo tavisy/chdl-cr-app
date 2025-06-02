@@ -10,15 +10,9 @@ import { Button } from "@/components/ui/button"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Mail, AlertCircle, LogOut, UserIcon } from "lucide-react"
 import { resendConfirmation, hasVerifiedAccess, getCurrentUser } from "@/lib/auth"
-import { shouldAllowPublicAccess } from "@/lib/auth-bypass"
 
 interface ClientLayoutProps {
   children: React.ReactNode
-}
-
-interface NavLink {
-  href: string
-  label: string
 }
 
 // Custom hook for localStorage with SSR safety
@@ -64,6 +58,11 @@ function useLocalStorage(key: string, initialValue: boolean): [boolean, (value: 
   }, [key, initialValue])
 
   return [storedValue, setValue, removeValue, isClient] as const
+}
+
+interface NavLink {
+  href: string
+  label: string
 }
 
 export default function ClientLayout({ children }: ClientLayoutProps): JSX.Element | null {
@@ -167,14 +166,6 @@ export default function ClientLayout({ children }: ClientLayoutProps): JSX.Eleme
   useEffect(() => {
     if (!authInitialized || loading) return
 
-    // Check if authentication should be bypassed
-    const allowPublicAccess = shouldAllowPublicAccess()
-
-    if (allowPublicAccess) {
-      console.log("🚨 Authentication bypass active - allowing public access")
-      return // Skip all authentication checks
-    }
-
     console.log("ClientLayout: Checking redirects...", {
       user: user ? "present" : "null",
       isPublicPage,
@@ -203,7 +194,7 @@ export default function ClientLayout({ children }: ClientLayoutProps): JSX.Eleme
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.og("ClientLayout: Auth state change:", event)
+      console.log("ClientLayout: Auth state change:", event)
 
       if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED") {
         if (session?.user) {
@@ -305,71 +296,6 @@ export default function ClientLayout({ children }: ClientLayoutProps): JSX.Eleme
       </div>
     )
   }
-
-  // Check if authentication should be bypassed before any auth checks
-  const allowPublicAccess = shouldAllowPublicAccess()
-
-  if (allowPublicAccess) {
-    console.log("🚨 Public access mode - rendering content without authentication")
-
-    // Show a subtle indicator that bypass is active (only in development)
-    const bypassIndicator = process.env.NODE_ENV === "development" && (
-      <div className="fixed top-0 left-0 right-0 z-50 bg-yellow-500 text-black text-center py-1 text-xs font-bold">
-        ⚠️ AUTHENTICATION BYPASS ACTIVE ⚠️
-      </div>
-    )
-
-    return (
-      <>
-        {bypassIndicator}
-        <nav
-          className="fixed top-0 left-0 right-0 z-50 bg-white/95 backdrop-blur-sm border-b"
-          style={{ marginTop: process.env.NODE_ENV === "development" ? "24px" : "0" }}
-        >
-          <div className="container mx-auto px-6 py-3">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Link href="/">
-                  <img
-                    src="/chdlscriptlogoxBigNERD-horizontal-blacktext.png"
-                    alt="Carter Hales x BIGNERD"
-                    className="h-6 md:h-8 w-auto cursor-pointer"
-                  />
-                </Link>
-              </div>
-
-              {/* Desktop navigation */}
-              <div className="hidden md:flex items-center gap-6 text-sm">
-                {navLinks.map(({ href, label }: NavLink) => (
-                  <Link key={href} href={href} className="text-slate-600 hover:text-slate-900 transition-colors">
-                    {label}
-                  </Link>
-                ))}
-              </div>
-            </div>
-          </div>
-        </nav>
-
-        <main className="pt-16" style={{ marginTop: process.env.NODE_ENV === "development" ? "24px" : "0" }}>
-          {children}
-        </main>
-
-        <footer className="bg-slate-900 text-white py-12">
-          <div className="container mx-auto px-6">
-            <div className="max-w-4xl mx-auto text-center">
-              <h3 className="text-2xl font-bold mb-4">Crown Royal Strategic Report</h3>
-              <p className="text-slate-300 mb-6">
-                Charting a Course for Premiumization and Bourbon Enthusiast Engagement
-              </p>
-              <div className="text-sm text-slate-400">© 2025 BigNERD Solutions x Carter Hales Design Lab</div>
-            </div>
-          </div>
-        </footer>
-      </>
-    )
-  }
-
-  // Continue with existing authentication logic for when bypass is disabled...
 
   // Render public pages without layout
   if (isPublicPage) {
