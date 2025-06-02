@@ -327,7 +327,7 @@ export async function signUpWithEmail(
         data: {
           full_name: metadata?.fullName || null,
         },
-        emailRedirectTo: `https://auth.kongzilla.carterhales.com/auth/v1/callback`,
+        emailRedirectTo: `${window.location.origin}/auth/verify`,
       },
     })
 
