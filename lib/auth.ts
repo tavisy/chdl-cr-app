@@ -70,11 +70,11 @@ export function hasVerifiedAccess(user: User): boolean {
  */
 export function needsEmailVerification(user: User): boolean {
   if (!user) return false
-  
+
   // Google users don't need email verification
   const isGoogleUser = user.app_metadata?.provider === "google"
   if (isGoogleUser) return false
-  
+
   // Email users need verification if email is not confirmed
   return !user.email_confirmed_at
 }
@@ -266,10 +266,10 @@ export async function logAccessWithProfile(
 export async function resendConfirmation(email: string): Promise<{ error?: any }> {
   try {
     console.log("Resending confirmation email for:", email)
-    
+
     const { error } = await supabase.auth.resend({
-      type: 'signup',
-      email: email
+      type: "signup",
+      email: email,
     })
 
     if (error) {
@@ -291,7 +291,7 @@ export async function resendConfirmation(email: string): Promise<{ error?: any }
 export async function sendPasswordReset(email: string): Promise<{ error?: any }> {
   try {
     console.log("Sending password reset email for:", email)
-    
+
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
       redirectTo: `${window.location.origin}/auth/callback?type=recovery`,
     })
@@ -313,13 +313,13 @@ export async function sendPasswordReset(email: string): Promise<{ error?: any }>
  * Sign up with email and password
  */
 export async function signUpWithEmail(
-  email: string, 
-  password: string, 
-  metadata?: { fullName?: string }
+  email: string,
+  password: string,
+  metadata?: { fullName?: string },
 ): Promise<{ user?: User; error?: any }> {
   try {
     console.log("Signing up user with email:", email)
-    
+
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
@@ -328,7 +328,7 @@ export async function signUpWithEmail(
           full_name: metadata?.fullName || null,
         },
         emailRedirectTo: `${window.location.origin}/auth/verify`,
-      }
+      },
     })
 
     if (error) {
@@ -338,7 +338,7 @@ export async function signUpWithEmail(
 
     if (data.user) {
       console.log("User signed up successfully:", data.user.email)
-      
+
       // Don't log access here since email needs to be verified first
       return { user: data.user }
     }
@@ -353,13 +353,10 @@ export async function signUpWithEmail(
 /**
  * Sign in with email and password
  */
-export async function signInWithEmail(
-  email: string, 
-  password: string
-): Promise<{ user?: User; error?: any }> {
+export async function signInWithEmail(email: string, password: string): Promise<{ user?: User; error?: any }> {
   try {
     console.log("Signing in user with email:", email)
-    
+
     const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password,
@@ -372,12 +369,12 @@ export async function signInWithEmail(
 
     if (data.user) {
       console.log("User signed in successfully:", data.user.email)
-      
+
       // Log access with profile update
       await logAccessWithProfile(data.user, "email", {
-        sessionType: "password_login"
+        sessionType: "password_login",
       })
-      
+
       return { user: data.user }
     }
 
@@ -394,12 +391,12 @@ export async function signInWithEmail(
 export async function signInWithGoogle(): Promise<{ error?: any }> {
   try {
     console.log("Initiating Google sign in...")
-    
+
     const { error } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
+      provider: "google",
       options: {
         redirectTo: `${window.location.origin}/auth/callback`,
-      }
+      },
     })
 
     if (error) {
@@ -421,9 +418,9 @@ export async function signInWithGoogle(): Promise<{ error?: any }> {
 export async function updatePassword(newPassword: string): Promise<{ error?: any }> {
   try {
     console.log("Updating user password...")
-    
+
     const { error } = await supabase.auth.updateUser({
-      password: newPassword
+      password: newPassword,
     })
 
     if (error) {
@@ -464,7 +461,7 @@ export async function getUserProfile(userId: string): Promise<Profile | null> {
 export function isAdmin(user: User): boolean {
   if (!user?.email) return false
 
-  const adminEmails = ["tav@bignerdlsolutions.com", "tavis@gmail.com", "tavisadmin@carterhales.com"]
+  const adminEmails = ["tav@bignerdlsolutions.com", "tavis@gmail.com", "tavisy@gmail.com", "tavisadmin@carterhales.com"]
 
   const adminDomains = ["@carterhales", "@bignerd"]
 

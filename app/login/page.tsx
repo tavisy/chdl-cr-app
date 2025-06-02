@@ -316,6 +316,7 @@ export default function LoginPage(): JSX.Element {
       const googleDebug = {
         hasData: !!data,
         error: error?.message,
+        timestamp: new Date().toISOString(),
       }
 
       setDebugInfo((prev) => ({
@@ -327,6 +328,8 @@ export default function LoginPage(): JSX.Element {
         console.error("Google sign in error:", error)
         setError(`Google sign-in failed: ${error.message}`)
         setLoading(false)
+      } else {
+        console.log("Google sign in initiated successfully, redirecting...")
       }
       // Don't set loading to false on success as we're redirecting
     } catch (err) {

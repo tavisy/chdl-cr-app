@@ -2,7 +2,7 @@
 import { useEffect, useState, useRef, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
-import { logAccess, hasVerifiedAccess } from "@/lib/auth"
+import { hasVerifiedAccess } from "@/lib/auth"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { CheckCircle, AlertCircle, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -38,52 +38,55 @@ export default function AuthCallbackPage(): JSX.Element {
     if (timeoutRef.current) {
       clearTimeout(timeoutRef.current)
     }
-    
+
     setStatus("error")
     setMessage(description || error)
-    setDebugInfo(prev => ({ ...prev, ...debug, error, errorDescription: description }))
+    setDebugInfo((prev) => ({ ...prev, ...debug, error, errorDescription: description }))
   }, [])
 
   // Memoized success handler
-  const handleSuccess = useCallback((user: User, redirectPath: string, debug?: Partial<DebugInfo>) => {
-    if (timeoutRef.current) {
-      clearTimeout(timeoutRef.current)
-    }
+  const handleSuccess = useCallback(
+    (user: User, redirectPath: string, debug?: Partial<DebugInfo>) => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current)
+      }
 
-    setStatus("success")
-    setMessage("Authentication successful! Redirecting...")
-    setDebugInfo(prev => ({ 
-      ...prev, 
-      ...debug,
-      userEmail: user.email,
-      provider: user.app_metadata?.provider,
-      hasAccess: hasVerifiedAccess(user)
-    }))
+      setStatus("success")
+      setMessage("Authentication successful! Redirecting...")
+      setDebugInfo((prev) => ({
+        ...prev,
+        ...debug,
+        userEmail: user.email,
+        provider: user.app_metadata?.provider,
+        hasAccess: hasVerifiedAccess(user),
+      }))
 
-    // Use requestAnimationFrame to ensure state update is processed
-    requestAnimationFrame(() => {
-      setTimeout(() => router.push(redirectPath), 1500)
-    })
-  }, [router])
+      // Use requestAnimationFrame to ensure state update is processed
+      requestAnimationFrame(() => {
+        setTimeout(() => router.push(redirectPath), 1500)
+      })
+    },
+    [router],
+  )
 
   // Parse URL parameters with better error handling
   const parseUrlParameters = useCallback(() => {
     try {
       const urlParams = new URLSearchParams(window.location.search)
       const hashParams = new URLSearchParams(window.location.hash.substring(1))
-      
+
       return {
         urlParams: Object.fromEntries(urlParams.entries()),
         hashParams: Object.fromEntries(hashParams.entries()),
         // Helper to get param from either location
-        getParam: (key: string) => urlParams.get(key) || hashParams.get(key)
+        getParam: (key: string) => urlParams.get(key) || hashParams.get(key),
       }
     } catch (error) {
       console.error("Error parsing URL parameters:", error)
       return {
         urlParams: {},
         hashParams: {},
-        getParam: () => null
+        getParam: () => null,
       }
     }
   }, [])
@@ -92,40 +95,52 @@ export default function AuthCallbackPage(): JSX.Element {
   const exchangeCodeForSession = useCallback(async (code: string, isRecovery: boolean) => {
     try {
       // For recovery flows, check if this is a PKCE token (starts with 'pkce_')
-      if (isRecovery && code.startsWith('pkce_')) {
+      if (isRecovery && code.startsWith("pkce_")) {
         console.log("AuthCallback: Detected PKCE recovery token, using session check instead")
-        
+
         // For PKCE recovery, the user should already be signed in
         // We just need to verify the session exists
         const { data: sessionData, error: sessionError } = await supabase.auth.getSession()
-        
+
         if (sessionError) {
           throw new Error("Failed to retrieve recovery session. Please try again.")
         }
-        
+
         if (!sessionData.session?.user) {
           throw new Error("Recovery session not found. Please request a new password reset.")
         }
-        
+
         return { user: sessionData.session.user, session: sessionData.session }
       }
-      
+
       // Regular code exchange for non-PKCE flows
       const { data, error } = await supabase.auth.exchangeCodeForSession(code)
-      
+
       if (error) {
+        console.error("Code exchange error details:", {
+          message: error.message,
+          status: error.status,
+          name: error.name,
+        })
+
         // Handle specific Supabase error types
         switch (error.message) {
-          case 'Invalid authorization code':
-            throw new Error(isRecovery ? 
-              "This recovery link has expired or is invalid. Please request a new password reset." :
-              "This authentication link has expired. Please sign in again.")
-          case 'Authorization code has already been used':
+          case "Invalid authorization code":
+            throw new Error(
+              isRecovery
+                ? "This recovery link has expired or is invalid. Please request a new password reset."
+                : "This authentication link has expired. Please sign in again.",
+            )
+          case "Authorization code has already been used":
             throw new Error("This link has already been used. Please request a new one.")
+          case "Invalid grant":
+            throw new Error("Authentication session expired. Please try signing in again.")
           default:
-            throw new Error(isRecovery ? 
-              "Unable to process password recovery. Please try again." :
-              "Authentication failed. Please try signing in again.")
+            throw new Error(
+              isRecovery
+                ? "Unable to process password recovery. Please try again."
+                : `Authentication failed: ${error.message}`,
+            )
         }
       }
 
@@ -145,13 +160,13 @@ export default function AuthCallbackPage(): JSX.Element {
     try {
       // Import the enhanced logging function
       const { logAccessWithProfile } = await import("@/lib/auth")
-      
+
       const loginMethod = provider === "google" ? "google" : "email"
-      
+
       await logAccessWithProfile(user, loginMethod, {
-        userAgent: typeof window !== 'undefined' ? window.navigator.userAgent : undefined
+        userAgent: typeof window !== "undefined" ? window.navigator.userAgent : undefined,
       })
-      
+
       console.log(`Access logged with profile update for ${user.email}`)
     } catch (error) {
       // Don't fail the auth flow for logging errors, just log them
@@ -188,11 +203,11 @@ export default function AuthCallbackPage(): JSX.Element {
 
         // Parse URL parameters
         const { getParam } = parseUrlParameters()
-        
+
         // Check for errors first
         const error = getParam("error")
         const errorDescription = getParam("error_description")
-        
+
         if (error) {
           console.error("AuthCallback: URL contains error:", error)
           handleError(error, errorDescription, { ...debug, step: "url_error" })
@@ -217,16 +232,16 @@ export default function AuthCallbackPage(): JSX.Element {
           debug.step = "no_code_check_session"
 
           const { data: sessionData } = await supabase.auth.getSession()
-          
+
           if (sessionData.session?.user) {
             console.log("AuthCallback: Found existing session")
             const user = sessionData.session.user
-            
+
             // If this is a recovery type but no code, it might be PKCE recovery
             if (isRecovery) {
               console.log("AuthCallback: Recovery session without code - treating as PKCE recovery")
               debug.step = "pkce_recovery_session"
-              
+
               if (timeoutRef.current) {
                 clearTimeout(timeoutRef.current)
               }
@@ -239,7 +254,7 @@ export default function AuthCallbackPage(): JSX.Element {
               setTimeout(() => router.push("/auth/reset-password?from=recovery"), 1000)
               return
             }
-            
+
             // Regular session handling
             await logUserAccess(user.id, user.app_metadata?.provider || "email")
             handleSuccess(user, "/", { ...debug, step: "existing_session" })
@@ -261,7 +276,7 @@ export default function AuthCallbackPage(): JSX.Element {
         if (isRecovery) {
           console.log("AuthCallback: Processing recovery flow - redirecting to password reset")
           debug.step = "recovery_redirect_to_reset"
-          
+
           if (timeoutRef.current) {
             clearTimeout(timeoutRef.current)
           }
@@ -279,18 +294,31 @@ export default function AuthCallbackPage(): JSX.Element {
         console.log("AuthCallback: Processing regular auth flow")
         debug.step = "regular_auth_success"
 
+        // Validate the user has proper access
+        if (!hasVerifiedAccess(user)) {
+          console.error("AuthCallback: User authenticated but doesn't have verified access")
+          handleError("Authentication incomplete", "Your account needs verification. Please check your email.", {
+            ...debug,
+            step: "access_verification_failed",
+            userEmail: user.email,
+            emailConfirmed: user.email_confirmed_at,
+            provider: user.app_metadata?.provider,
+          })
+          setTimeout(() => router.push("/login"), 3000)
+          return
+        }
+
         // Log access asynchronously with profile updates
         logUserAccess(user, user.app_metadata?.provider || "email")
 
         handleSuccess(user, "/", { ...debug, step: "auth_complete" })
-
       } catch (error) {
         console.error("AuthCallback: Error:", error)
         const errorMessage = error instanceof Error ? error.message : "An unexpected error occurred"
-        handleError(errorMessage, "Please try again.", { 
-          ...debug, 
+        handleError(errorMessage, "Please try again.", {
+          ...debug,
           step: "exception",
-          exchangeError: error as AuthError
+          exchangeError: error as AuthError,
         })
         setTimeout(() => router.push("/login"), 3000)
       }
@@ -315,7 +343,7 @@ export default function AuthCallbackPage(): JSX.Element {
 
   const renderStatusIcon = (): JSX.Element => {
     const iconProps = { className: "h-16 w-16" }
-    
+
     switch (status) {
       case "loading":
         return <Loader2 {...iconProps} className="h-16 w-16 text-purple-600 animate-spin" />
@@ -333,20 +361,20 @@ export default function AuthCallbackPage(): JSX.Element {
     const baseContent = {
       loading: {
         title: "Processing...",
-        description: "Processing your authentication..."
+        description: "Processing your authentication...",
       },
       success: {
         title: "Success!",
-        description: "Authentication completed successfully"
+        description: "Authentication completed successfully",
       },
       recovery: {
         title: "Password Recovery Complete!",
-        description: "Your recovery link is valid and you're now authenticated"
+        description: "Your recovery link is valid and you're now authenticated",
       },
       error: {
         title: "Authentication Failed",
-        description: "There was an issue with authentication"
-      }
+        description: "There was an issue with authentication",
+      },
     }
 
     return baseContent[status] || baseContent.loading
@@ -367,31 +395,28 @@ export default function AuthCallbackPage(): JSX.Element {
           <CardTitle className="text-2xl font-bold">{title}</CardTitle>
           <CardDescription>{description}</CardDescription>
         </CardHeader>
-        
+
         <CardContent className="text-center">
           <div className="flex flex-col items-center space-y-4">
             {renderStatusIcon()}
             <p className="text-slate-600">{message}</p>
-            
+
             {(status === "success" || status === "recovery") && (
               <div className="w-full bg-gray-200 rounded-full h-2">
-                <div 
-                  className="bg-green-600 h-2 rounded-full transition-all duration-1000" 
-                  style={{ width: "100%" }}
-                />
+                <div className="bg-green-600 h-2 rounded-full transition-all duration-1000" style={{ width: "100%" }} />
               </div>
             )}
-            
+
             {status === "loading" && debugInfo?.step && process.env.NODE_ENV === "development" && (
               <p className="text-xs text-slate-500">Step: {debugInfo.step}</p>
             )}
-            
+
             {status === "error" && (
               <Button onClick={handleReturnToLogin} className="w-full mt-4">
                 Return to Login
               </Button>
             )}
-            
+
             {(status === "success" || status === "recovery") && (
               <p className="text-sm text-slate-500">Redirecting automatically...</p>
             )}
@@ -404,9 +429,7 @@ export default function AuthCallbackPage(): JSX.Element {
                 Debug Information
               </summary>
               <div className="mt-2 p-3 bg-gray-100 rounded text-xs overflow-auto max-h-60">
-                <pre className="whitespace-pre-wrap">
-                  {JSON.stringify(debugInfo, null, 2)}
-                </pre>
+                <pre className="whitespace-pre-wrap">{JSON.stringify(debugInfo, null, 2)}</pre>
               </div>
             </details>
           )}
