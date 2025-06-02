@@ -1,5 +1,5 @@
 "use client"
-import type { FC } from "react"
+
 import { useSearchParams } from "next/navigation"
 import { useEffect, useState } from "react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
@@ -11,7 +11,7 @@ import { Separator } from "@/components/ui/separator"
 import { BarChart3, Users, Target, Lightbulb, TrendingUp, Globe, TrendingDown, BookOpen } from "lucide-react"
 import Link from "next/link"
 
-const HomePage: FC = () => {
+export default function HomePage() {
   const [activeSection, setActiveSection] = useState("overview")
   const searchParams = useSearchParams()
   const [showPasswordChangeSuccess, setShowPasswordChangeSuccess] = useState(false)
@@ -46,7 +46,7 @@ const HomePage: FC = () => {
             <AlertDescription className="text-green-800 pr-8">
               <strong>Password Updated Successfully!</strong>
               <br />
-              Your password has been changed and you&apos;re now logged in.
+              Your password has been changed and you are now logged in.
             </AlertDescription>
             <button
               onClick={() => setShowPasswordChangeSuccess(false)}
@@ -89,11 +89,8 @@ const HomePage: FC = () => {
           <div className="flex flex-wrap gap-2 justify-center">
             {sections.map((section) => {
               const Icon = section.icon
-              const isRecommendations = section.id === "recommendations"
-              const isIdentity = section.id === "identity"
-              const isReferences = section.id === "references"
 
-              if (isRecommendations) {
+              if (section.id === "recommendations") {
                 return (
                   <Button
                     key={section.id}
@@ -110,7 +107,7 @@ const HomePage: FC = () => {
                 )
               }
 
-              if (isIdentity) {
+              if (section.id === "identity") {
                 return (
                   <Button
                     key={section.id}
@@ -127,7 +124,7 @@ const HomePage: FC = () => {
                 )
               }
 
-              if (isReferences) {
+              if (section.id === "references") {
                 return (
                   <Button
                     key={section.id}
@@ -144,7 +141,18 @@ const HomePage: FC = () => {
                 )
               }
 
-              return null
+              return (
+                <Button
+                  key={section.id}
+                  variant={activeSection === section.id ? "default" : "ghost"}
+                  size="sm"
+                  className="flex items-center gap-2"
+                  onClick={() => setActiveSection(section.id)}
+                >
+                  <Icon className="h-4 w-4" />
+                  {section.title}
+                </Button>
+              )
             })}
           </div>
         </div>
@@ -490,7 +498,7 @@ const HomePage: FC = () => {
                 <h3 className="text-xl font-semibold mb-3 text-slate-900">Experiential Consumers</h3>
                 <p className="text-slate-700 mb-4">
                   Interested in visiting distilleries, participating in tastings, and learning about whiskey-making
-                  process. View experiences as &quot;affordable luxury.&quot;
+                  process. View experiences as affordable luxury.
                 </p>
                 <Badge variant="secondary">Experience Driven</Badge>
               </Card>
@@ -502,7 +510,7 @@ const HomePage: FC = () => {
                 <h3 className="text-xl font-semibold mb-3 text-slate-900">Value-Conscious</h3>
                 <p className="text-slate-700 mb-4">
                   Prioritize price-to-value while remaining quality-focused. Seek accessible whiskies positioned as
-                  &quot;everyday indulgences&quot; with quality delivery.
+                  everyday indulgences with quality delivery.
                 </p>
                 <Badge variant="secondary">Price Sensitive</Badge>
               </Card>
@@ -555,5 +563,3 @@ const HomePage: FC = () => {
     </div>
   )
 }
-
-export default HomePage
