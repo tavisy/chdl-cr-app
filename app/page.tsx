@@ -66,7 +66,7 @@ export default function HomePage() {
         <img
           src="/kongzillabackgroundforcrdash.jpg"
           alt="Crown Royal Premium Background"
-          className="absolute inset-0 w-full h-full object-cover opacity-20"
+          className="absolute inset-0 w-full h-full object-cover opacity-20 hero-background-image"
         />
         <div className="relative container mx-auto px-6 py-24">
           <div className="max-w-4xl mx-auto text-center">
