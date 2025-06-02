@@ -10,9 +10,12 @@ import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { BarChart3, Users, Target, Lightbulb, TrendingUp, Globe, TrendingDown, BookOpen } from "lucide-react"
 import Link from "next/link"
+import { CookieConsent } from "@/components/CookieConsent"
+import { useCookieConsent } from "@/hooks/useCookieConsent"
 
 export default function HomePage() {
   const [activeSection, setActiveSection] = useState("overview")
+  const { showBanner, acceptCookies, declineCookies } = useCookieConsent()
 
   const searchParams = useSearchParams()
   const [showPasswordChangeSuccess, setShowPasswordChangeSuccess] = useState(false)
@@ -556,6 +559,9 @@ export default function HomePage() {
           </div>
         </div>
       </section>
+
+      {/* Cookie Consent Banner */}
+      {showBanner && <CookieConsent onAccept={acceptCookies} onDecline={declineCookies} />}
     </div>
   )
 }
