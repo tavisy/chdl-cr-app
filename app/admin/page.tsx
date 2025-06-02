@@ -140,7 +140,7 @@ export default function AdminDashboard() {
           currentUser.email?.includes("@carterhales") ||
           currentUser.email?.includes("@bignerdsolutions") ||
           currentUser.email?.includes("admin") ||
-          currentUser.email === "tavis@gmail.com" ||
+          currentUser.email === "tavisy@gmail.com" ||
           currentUser.email === "tavis@carterhales.com" ||
           currentUser.email === "tav@bignerdsolutions.com"
 
