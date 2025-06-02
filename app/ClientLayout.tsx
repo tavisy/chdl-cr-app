@@ -11,6 +11,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Mail, AlertCircle, LogOut, UserIcon } from "lucide-react"
 import { resendConfirmation, hasVerifiedAccess, getCurrentUser } from "@/lib/auth"
 import { shouldAllowPublicAccess } from "@/lib/auth-bypass"
+import Script from "next/script"
 
 interface ClientLayoutProps {
   children: React.ReactNode
@@ -207,7 +208,7 @@ export default function ClientLayout({ children }: ClientLayoutProps): JSX.Eleme
       router.push("/")
       return
     }
-  }, [user, authInitialized, loading, isPublicPage, pathname, router, allowPublicAccess, router])
+  }, [user, authInitialized, loading, isPublicPage, pathname, router, allowPublicAccess])
 
   // Auth state change listener - skip if bypass is active
   useEffect(() => {
@@ -630,6 +631,12 @@ export default function ClientLayout({ children }: ClientLayoutProps): JSX.Eleme
           </div>
         </div>
       </footer>
+      {/* BigNERD Chatbot - Only for authenticated users */}
+      <Script
+        src="https://chatapp.bignerdsolutions.com/js/chat_plugin.js"
+        data-bot-id="51415"
+        strategy="afterInteractive"
+      />
     </>
   )
 }
