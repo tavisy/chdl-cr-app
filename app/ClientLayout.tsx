@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Mail, AlertCircle, LogOut, UserIcon } from "lucide-react"
 import { resendConfirmation, hasVerifiedAccess, getCurrentUser } from "@/lib/auth"
+import { shouldAllowPublicAccess } from "@/lib/auth-bypass"
 
 interface ClientLayoutProps {
   children: React.ReactNode
@@ -85,6 +86,14 @@ export default function ClientLayout({ children }: ClientLayoutProps): JSX.Eleme
   const publicPages: string[] = ["/login", "/auth/callback", "/auth/verify"]
   const isPublicPage: boolean = publicPages.includes(pathname)
 
+  // Check if authentication should be bypassed
+  const allowPublicAccess = useMemo(() => {
+    if (typeof window !== "undefined") {
+      return shouldAllowPublicAccess(navigator.userAgent)
+    }
+    return shouldAllowPublicAccess()
+  }, [])
+
   // Memoized access check that only recalculates when user changes
   const userHasAccess = useMemo(() => {
     if (!user) return false
@@ -106,7 +115,7 @@ export default function ClientLayout({ children }: ClientLayoutProps): JSX.Eleme
 
   // Add a small delay before showing loading spinner to prevent flashing
   useEffect(() => {
-    if (loading && !authInitialized) {
+    if (loading && !authInitialized && !allowPublicAccess) {
       loadingTimeoutRef.current = setTimeout(() => {
         setShowLoadingSpinner(true)
       }, 200) // 200ms delay
@@ -123,10 +132,17 @@ export default function ClientLayout({ children }: ClientLayoutProps): JSX.Eleme
         clearTimeout(loadingTimeoutRef.current)
       }
     }
-  }, [loading, authInitialized])
+  }, [loading, authInitialized, allowPublicAccess])
 
-  // ONE-TIME authentication initialization
+  // ONE-TIME authentication initialization - skip if bypass is active
   useEffect(() => {
+    if (allowPublicAccess) {
+      console.log("🚨 Auth bypass active - skipping authentication initialization")
+      setAuthInitialized(true)
+      setLoading(false)
+      return
+    }
+
     const initializeAuth = async (): Promise<void> => {
       try {
         console.log("ClientLayout: ONE-TIME auth initialization...")
@@ -160,11 +176,17 @@ export default function ClientLayout({ children }: ClientLayoutProps): JSX.Eleme
     if (!authInitialized) {
       initializeAuth()
     }
-  }, [authInitialized])
+  }, [authInitialized, allowPublicAccess])
 
   // Handle redirects ONLY after auth is initialized
   useEffect(() => {
     if (!authInitialized || loading) return
+
+    // Skip all authentication checks if bypass is active
+    if (allowPublicAccess) {
+      console.log("🚨 Authentication bypass active - allowing public access")
+      return
+    }
 
     console.log("ClientLayout: Checking redirects...", {
       user: user ? "present" : "null",
@@ -185,10 +207,15 @@ export default function ClientLayout({ children }: ClientLayoutProps): JSX.Eleme
       router.push("/")
       return
     }
-  }, [user, authInitialized, loading, isPublicPage, pathname, router])
+  }, [user, authInitialized, loading, isPublicPage, pathname, router, allowPublicAccess, router])
 
-  // Auth state change listener - optimized with change detection
+  // Auth state change listener - skip if bypass is active
   useEffect(() => {
+    if (allowPublicAccess) {
+      console.log("🚨 Auth bypass active - skipping auth state listener")
+      return
+    }
+
     console.log("ClientLayout: Setting up auth state listener...")
 
     const {
@@ -222,7 +249,7 @@ export default function ClientLayout({ children }: ClientLayoutProps): JSX.Eleme
       console.log("ClientLayout: Cleaning up auth state listener")
       subscription.unsubscribe()
     }
-  }, [authInitialized, user?.id]) // Include user.id to detect changes
+  }, [authInitialized, user?.id, allowPublicAccess])
 
   // Mobile menu click outside handler
   useEffect(() => {
@@ -276,6 +303,112 @@ export default function ClientLayout({ children }: ClientLayoutProps): JSX.Eleme
   const toggleMobileMenu = (e: React.MouseEvent<HTMLButtonElement>): void => {
     e.stopPropagation()
     setMobileMenuOpen(!mobileMenuOpen)
+  }
+
+  // Navigation links data
+  const navLinks: NavLink[] = [
+    { href: "/", label: "Overview" },
+    { href: "/market-disruption", label: "Market Disruption" },
+    { href: "/competitive-analysis", label: "Competitive Analysis" },
+    { href: "/consumer-insights", label: "Consumer Insights" },
+    { href: "/recommendations", label: "Recommendations" },
+  ]
+
+  // If authentication bypass is active, render public layout
+  if (allowPublicAccess) {
+    console.log("🚨 Public access mode - rendering content without authentication")
+
+    // Show a subtle indicator that bypass is active (only in development)
+    const bypassIndicator = process.env.NODE_ENV === "development" && (
+      <div className="fixed top-0 left-0 right-0 z-50 bg-yellow-500 text-black text-center py-1 text-xs font-bold">
+        ⚠️ AUTHENTICATION BYPASS ACTIVE ⚠️
+      </div>
+    )
+
+    return (
+      <>
+        {bypassIndicator}
+        <nav
+          className="fixed top-0 left-0 right-0 z-50 bg-white/95 backdrop-blur-sm border-b"
+          style={{ marginTop: process.env.NODE_ENV === "development" ? "24px" : "0" }}
+        >
+          <div className="container mx-auto px-6 py-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Link href="/">
+                  <img
+                    src="/chdlscriptlogoxBigNERD-horizontal-blacktext.png"
+                    alt="Carter Hales x BIGNERD"
+                    className="h-6 md:h-8 w-auto cursor-pointer"
+                  />
+                </Link>
+              </div>
+
+              {/* Mobile menu button */}
+              <button
+                onClick={toggleMobileMenu}
+                className="md:hidden flex flex-col gap-1 p-2"
+                aria-label="Toggle menu"
+                type="button"
+              >
+                <span
+                  className={`w-6 h-0.5 bg-slate-900 transition-all ${mobileMenuOpen ? "rotate-45 translate-y-2" : ""}`}
+                />
+                <span className={`w-6 h-0.5 bg-slate-900 transition-all ${mobileMenuOpen ? "opacity-0" : ""}`} />
+                <span
+                  className={`w-6 h-0.5 bg-slate-900 transition-all ${mobileMenuOpen ? "-rotate-45 -translate-y-2" : ""}`}
+                />
+              </button>
+
+              {/* Desktop navigation */}
+              <div className="hidden md:flex items-center gap-6 text-sm">
+                {navLinks.map(({ href, label }: NavLink) => (
+                  <Link key={href} href={href} className="text-slate-600 hover:text-slate-900 transition-colors">
+                    {label}
+                  </Link>
+                ))}
+              </div>
+            </div>
+
+            {/* Mobile navigation menu */}
+            <div
+              className={`md:hidden transition-all duration-300 ease-in-out ${
+                mobileMenuOpen ? "max-h-96 opacity-100" : "max-h-0 opacity-0"
+              } overflow-hidden`}
+            >
+              <div className="py-4 space-y-3 border-t border-slate-200 mt-3">
+                {navLinks.map(({ href, label }: NavLink) => (
+                  <Link
+                    key={href}
+                    href={href}
+                    className="block text-slate-600 hover:text-slate-900 transition-colors py-2"
+                    onClick={() => setMobileMenuOpen(false)}
+                  >
+                    {label}
+                  </Link>
+                ))}
+              </div>
+            </div>
+          </div>
+        </nav>
+
+        <main className="pt-16" style={{ marginTop: process.env.NODE_ENV === "development" ? "24px" : "0" }}>
+          {children}
+        </main>
+
+        <footer className="bg-slate-900 text-white py-12">
+          <div className="container mx-auto px-6">
+            <div className="max-w-4xl mx-auto text-center">
+              <h3 className="text-2xl font-bold mb-4">Crown Royal Strategic Report</h3>
+              <p className="text-slate-300 mb-6">
+                Charting a Course for Premiumization and Bourbon Enthusiast Engagement
+              </p>
+              <div className="text-sm text-slate-400">© 2025 BigNERD Solutions x Carter Hales Design Lab</div>
+            </div>
+          </div>
+        </footer>
+      </>
+    )
   }
 
   // Loading state - only show while initializing auth with delay
@@ -383,15 +516,6 @@ export default function ClientLayout({ children }: ClientLayoutProps): JSX.Eleme
       </div>
     )
   }
-
-  // Navigation links data
-  const navLinks: NavLink[] = [
-    { href: "/", label: "Overview" },
-    { href: "/market-disruption", label: "Market Disruption" },
-    { href: "/competitive-analysis", label: "Competitive Analysis" },
-    { href: "/consumer-insights", label: "Consumer Insights" },
-    { href: "/recommendations", label: "Recommendations" },
-  ]
 
   console.log("ClientLayout: Rendering main layout for verified user")
 
