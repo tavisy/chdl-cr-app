@@ -64,9 +64,9 @@ export default function HomePage() {
       <div className="relative bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 text-white">
         <div className="absolute inset-0 bg-black/20"></div>
         <img
-          src="/hero-background.jpg"
+          src="/kongzillabackgroundforcrdash.jpg"
           alt="Crown Royal Premium Background"
-          className="absolute inset-0 w-full h-full object-cover opacity-30"
+          className="absolute inset-0 w-full h-full object-cover opacity-20"
         />
         <div className="relative container mx-auto px-6 py-24">
           <div className="max-w-4xl mx-auto text-center">
