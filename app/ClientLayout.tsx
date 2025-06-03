@@ -12,6 +12,9 @@ import { Mail, AlertCircle, LogOut, UserIcon } from "lucide-react"
 import { resendConfirmation, hasVerifiedAccess, getCurrentUser } from "@/lib/auth"
 import { shouldAllowPublicAccess } from "@/lib/auth-bypass"
 
+// Import the ChatbotWidget component at the top of the file
+import { ChatbotWidget } from "@/components/ChatbotWidget"
+
 interface ClientLayoutProps {
   children: React.ReactNode
 }
@@ -407,6 +410,7 @@ export default function ClientLayout({ children }: ClientLayoutProps): JSX.Eleme
             </div>
           </div>
         </footer>
+        {/* Chatbot is intentionally not included in public layout */}
       </>
     )
   }
@@ -630,6 +634,7 @@ export default function ClientLayout({ children }: ClientLayoutProps): JSX.Eleme
           </div>
         </div>
       </footer>
+      {userHasAccess && user && <ChatbotWidget userId={user.id} userEmail={user.email} />}
     </>
   )
 }
