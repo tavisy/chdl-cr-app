@@ -19,6 +19,7 @@ interface DebugInfo {
   userEmail?: string
   searchParams?: Record<string, string>
   hashParams?: Record<string, string>
+  method?: string
 }
 
 export default function AuthCallbackPage(): JSX.Element {
@@ -109,68 +110,119 @@ export default function AuthCallbackPage(): JSX.Element {
           return
         }
 
-        debug.step = "exchanging_code"
-        console.log("AuthCallback: Exchanging code for session...")
+        let sessionData = null
+        let sessionError = null
 
-        // Exchange the code for a session
-        const { data, error: sessionError } = await supabase.auth.exchangeCodeForSession(window.location.href)
+        // Method 1: Check if we already have a session (OAuth flow completed)
+        console.log("AuthCallback: Checking for existing session...")
+        debug.step = "existing_session_check"
+        debug.method = "existing_session"
+
+        try {
+          const { data, error } = await supabase.auth.getSession()
+          if (!error && data.session) {
+            sessionData = data
+            console.log("AuthCallback: Found existing session for:", data.session.user.email)
+          } else {
+            console.log("AuthCallback: No existing session found")
+          }
+        } catch (err) {
+          console.log("AuthCallback: Error checking existing session:", err)
+        }
+
+        // Method 2: If we have an access token in the hash, use it
+        if (!sessionData && accessToken) {
+          console.log("AuthCallback: Attempting to set session with access token...")
+          debug.step = "set_session_with_token"
+          debug.method = "set_session"
+
+          try {
+            const { data, error } = await supabase.auth.setSession({
+              access_token: accessToken,
+              refresh_token: refreshToken || "",
+            })
+
+            if (!error && data.session) {
+              sessionData = data
+              console.log("AuthCallback: Session set successfully with access token")
+            } else {
+              console.log("AuthCallback: Failed to set session with access token:", error)
+              sessionError = error
+            }
+          } catch (err) {
+            console.log("AuthCallback: Exception setting session with access token:", err)
+            sessionError = err
+          }
+        }
+
+        // Method 3: Wait a moment and check for session again (OAuth might be processing)
+        if (!sessionData) {
+          console.log("AuthCallback: Waiting for OAuth to complete...")
+          debug.step = "waiting_for_oauth"
+          debug.method = "wait_and_check"
+
+          await new Promise((resolve) => setTimeout(resolve, 2000))
+
+          try {
+            const { data, error } = await supabase.auth.getSession()
+            if (!error && data.session) {
+              sessionData = data
+              console.log("AuthCallback: Session found after waiting")
+            } else {
+              console.log("AuthCallback: Still no session after waiting")
+            }
+          } catch (err) {
+            console.log("AuthCallback: Error checking session after waiting:", err)
+          }
+        }
+
+        // Method 4: Try refresh session
+        if (!sessionData) {
+          console.log("AuthCallback: Attempting session refresh...")
+          debug.step = "session_refresh"
+          debug.method = "refresh"
+
+          try {
+            const { data, error } = await supabase.auth.refreshSession()
+            if (!error && data.session) {
+              sessionData = data
+              console.log("AuthCallback: Session refresh successful")
+            } else {
+              console.log("AuthCallback: Session refresh failed:", error)
+            }
+          } catch (err) {
+            console.log("AuthCallback: Session refresh exception:", err)
+          }
+        }
 
         if (timeoutRef.current) {
           clearTimeout(timeoutRef.current)
         }
 
-        if (sessionError) {
-          console.error("AuthCallback: Session exchange error:", sessionError)
-          debug.step = "session_exchange_error"
-          debug.error = sessionError.message
+        // If we still don't have a session, show error
+        if (!sessionData || !sessionData.session || !sessionData.user) {
+          console.error("AuthCallback: Failed to establish session with any method")
+          debug.step = "all_methods_failed"
+          debug.error = sessionError?.message || "All authentication methods failed"
 
-          // Handle specific session errors
-          switch (sessionError.message) {
-            case "Token has expired":
-            case "Signup confirmation token expired":
-              setStatus("expired")
-              setMessage("This verification link has expired. Please request a new confirmation email.")
-              break
-            case "Email link is invalid or has expired":
-              setStatus("expired")
-              setMessage("This verification link is no longer valid. Please request a new one.")
-              break
-            case "User already registered":
-            case "Email address already confirmed":
-              setStatus("already_verified")
-              setMessage("Your email has already been verified. You can sign in to your account.")
-              break
-            default:
-              setStatus("error")
-              setMessage(`Authentication failed: ${sessionError.message}`)
-          }
-
-          setDebugInfo(debug)
-          return
-        }
-
-        // Check if we have a valid session and user
-        if (!data.session || !data.user) {
-          console.error("AuthCallback: No session or user data returned")
-          debug.step = "no_session_data"
           setStatus("error")
-          setMessage("Authentication process incomplete. Please try again or contact support.")
+          setMessage("Authentication failed to establish session. Please try signing in again.")
           setDebugInfo(debug)
           return
         }
 
-        console.log("AuthCallback: Authentication successful for:", data.user.email)
+        console.log("AuthCallback: Authentication successful for:", sessionData.user.email)
         debug.step = "auth_success"
-        debug.userEmail = data.user.email
+        debug.userEmail = sessionData.user.email
 
         // Determine the login method
-        const loginMethod = data.user.app_metadata?.provider === "google" ? "google" : "email"
+        const loginMethod = sessionData.user.app_metadata?.provider === "google" ? "google" : "email"
 
         // Log the successful authentication with profile update
         try {
           const { logAccessWithProfile } = await import("@/lib/auth")
-          await logAccessWithProfile(data.user, loginMethod, {
-            sessionType: type === "recovery" ? "password_recovery" : "verification",
+          await logAccessWithProfile(sessionData.user, loginMethod, {
+            sessionType: type === "recovery" ? "password_recovery" : "oauth_login",
           })
           debug.step = "access_logged"
         } catch (logError) {
@@ -336,7 +388,9 @@ export default function AuthCallbackPage(): JSX.Element {
 
             {/* Loading state */}
             {status === "loading" && debugInfo?.step && process.env.NODE_ENV === "development" && (
-              <p className="text-xs text-slate-500">Step: {debugInfo.step}</p>
+              <p className="text-xs text-slate-500">
+                Step: {debugInfo.step} | Method: {debugInfo.method}
+              </p>
             )}
 
             {/* Success state with redirect indicator */}
@@ -392,19 +446,6 @@ export default function AuthCallbackPage(): JSX.Element {
             {/* Error state */}
             {status === "error" && (
               <div className="w-full space-y-3">
-                <Button onClick={handleResendVerification} disabled={isResending} className="w-full">
-                  {isResending ? (
-                    <>
-                      <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                      Sending New Link...
-                    </>
-                  ) : (
-                    <>
-                      <Mail className="h-4 w-4 mr-2" />
-                      Request New Verification Email
-                    </>
-                  )}
-                </Button>
                 <Button onClick={handleReturnToLogin} variant="outline" className="w-full">
                   Return to Login
                 </Button>

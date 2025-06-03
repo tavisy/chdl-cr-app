@@ -1,4 +1,4 @@
-// @/lib/auth.ts - Complete auth library with all required exports
+// @/lib/auth.ts - Complete auth library with all required exports and custom OAuth domain support
 
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"
 import type { User } from "@supabase/supabase-js"
@@ -286,14 +286,15 @@ export async function resendConfirmation(email: string): Promise<{ error?: any }
 }
 
 /**
- * Send password reset email
+ * Send password reset email - FIXED for custom OAuth domain
  */
 export async function sendPasswordReset(email: string): Promise<{ error?: any }> {
   try {
     console.log("Sending password reset email for:", email)
 
+    // Use your custom OAuth domain for password reset
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/auth/callback?type=recovery`,
+      redirectTo: `https://auth.kongzilla.carterhales.com/auth/v1/callback?type=recovery`,
     })
 
     if (error) {
@@ -310,7 +311,7 @@ export async function sendPasswordReset(email: string): Promise<{ error?: any }>
 }
 
 /**
- * Sign up with email and password
+ * Sign up with email and password - FIXED for custom OAuth domain
  */
 export async function signUpWithEmail(
   email: string,
@@ -327,7 +328,7 @@ export async function signUpWithEmail(
         data: {
           full_name: metadata?.fullName || null,
         },
-        // Use callback URL for proper flow
+        // Use your actual app domain for email verification
         emailRedirectTo: `${window.location.origin}/auth/callback`,
       },
     })
@@ -339,7 +340,6 @@ export async function signUpWithEmail(
 
     if (data.user) {
       console.log("User signed up successfully:", data.user.email)
-
       // Don't log access here since email needs to be verified first
       return { user: data.user }
     }
@@ -387,19 +387,22 @@ export async function signInWithEmail(email: string, password: string): Promise<
 }
 
 /**
- * Sign in with Google
+ * Sign in with Google - FIXED for optimal PKCE flow
  */
 export async function signInWithGoogle(): Promise<{ error?: any }> {
   try {
-    console.log("Initiating Google sign in...")
+    console.log("Initiating Google sign in with optimized PKCE flow...")
 
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
+        // Redirect to our app after OAuth completes
         redirectTo: `${window.location.origin}/auth/callback`,
         queryParams: {
-          access_type: "offline",
-          prompt: "consent",
+          // Use "online" for better PKCE compatibility
+          access_type: "online",
+          // Remove prompt to avoid PKCE issues
+          // prompt: "consent" // Commented out as it can interfere with PKCE
         },
       },
     })
@@ -409,7 +412,8 @@ export async function signInWithGoogle(): Promise<{ error?: any }> {
       return { error }
     }
 
-    // OAuth redirect happens here, so no return needed
+    console.log("Google sign-in initiated successfully")
+    // OAuth redirect happens automatically
     return {}
   } catch (error) {
     console.error("Exception during Google sign in:", error)
@@ -468,7 +472,7 @@ export function isAdmin(user: User): boolean {
 
   const adminEmails = ["tav@bignerdlsolutions.com", "tavis@gmail.com", "tavisy@gmail.com", "tavisadmin@carterhales.com"]
 
-  const adminDomains = ["@carterhales", "@bignerd"]
+  const adminDomains = ["@carterhales", "@bignerdsolutions"]
 
   // Check exact email matches
   if (adminEmails.includes(user.email)) return true

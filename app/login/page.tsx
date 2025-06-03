@@ -7,6 +7,7 @@ import {
   signUpWithEmail,
   signInWithGoogle,
   resendConfirmation,
+  sendPasswordReset, // FIXED: Import sendPasswordReset instead of using supabase directly
   hasVerifiedAccess,
   needsEmailVerification,
 } from "@/lib/auth"
@@ -161,15 +162,15 @@ export default function LoginPage(): JSX.Element {
     console.log("Attempting sign in for:", email)
 
     try {
-      const { data, error } = await signInWithEmail(email, password)
+      const { user, error } = await signInWithEmail(email, password)
 
       const signInDebug = {
         email,
-        hasData: !!data,
-        hasUser: !!data?.user,
-        hasSession: !!data?.session,
+        hasData: !!user,
+        hasUser: !!user,
+        hasSession: !!user,
         error: error?.message,
-        userVerified: data?.user ? hasVerifiedAccess(data.user) : false,
+        userVerified: user ? hasVerifiedAccess(user) : false,
       }
 
       setDebugInfo((prev) => ({
@@ -192,20 +193,20 @@ export default function LoginPage(): JSX.Element {
           setPendingEmail(email)
           setMessage("Please verify your email address before signing in.")
         }
-      } else if (data?.user) {
+      } else if (user) {
         console.log("Sign in successful:", {
-          email: data.user.email,
-          confirmed: data.user.email_confirmed_at,
-          provider: data.user.app_metadata?.provider,
-          id: data.user.id,
+          email: user.email,
+          confirmed: user.email_confirmed_at,
+          provider: user.app_metadata?.provider,
+          id: user.id,
         })
 
         // Update current user state
-        setCurrentUser(data.user)
+        setCurrentUser(user)
 
         // Use the helper functions to check access
-        const userHasAccess = hasVerifiedAccess(data.user)
-        const userNeedsVerification = needsEmailVerification(data.user)
+        const userHasAccess = hasVerifiedAccess(user)
+        const userNeedsVerification = needsEmailVerification(user)
 
         if (userHasAccess) {
           console.log("User has verified access, redirecting to home")
@@ -213,7 +214,7 @@ export default function LoginPage(): JSX.Element {
         } else if (userNeedsVerification) {
           console.log("Email user needs verification")
           setShowResendButton(true)
-          setPendingEmail(data.user.email || "")
+          setPendingEmail(user.email || "")
           setMessage("Please verify your email address to continue.")
         } else {
           // This shouldn't happen, but handle it gracefully
@@ -238,13 +239,13 @@ export default function LoginPage(): JSX.Element {
     console.log("Attempting sign up for:", email)
 
     try {
-      const { data, error } = await signUpWithEmail(email, password, fullName)
+      const { user, error } = await signUpWithEmail(email, password, { fullName })
 
       const signUpDebug = {
         email,
-        hasData: !!data,
-        hasUser: !!data?.user,
-        hasSession: !!data?.session,
+        hasData: !!user,
+        hasUser: !!user,
+        hasSession: !!user,
         error: error?.message,
       }
 
@@ -311,10 +312,10 @@ export default function LoginPage(): JSX.Element {
 
     try {
       console.log("Attempting Google sign in")
-      const { data, error } = await signInWithGoogle()
+      const { error } = await signInWithGoogle()
 
       const googleDebug = {
-        hasData: !!data,
+        hasData: !error,
         error: error?.message,
         timestamp: new Date().toISOString(),
       }
@@ -330,8 +331,8 @@ export default function LoginPage(): JSX.Element {
         setLoading(false)
       } else {
         console.log("Google sign in initiated successfully, redirecting...")
+        // Don't set loading to false on success as we're redirecting
       }
-      // Don't set loading to false on success as we're redirecting
     } catch (err) {
       console.error("Google sign in exception:", err)
       setError("Failed to connect to Google. Please try again or use email sign-in.")
@@ -340,6 +341,7 @@ export default function LoginPage(): JSX.Element {
     }
   }
 
+  // FIXED: Use sendPasswordReset from auth.ts instead of direct supabase call
   const handleForgotPassword = async (e: React.FormEvent<HTMLFormElement>): Promise<void> => {
     e.preventDefault()
     setLoading(true)
@@ -349,9 +351,7 @@ export default function LoginPage(): JSX.Element {
     console.log("Attempting password reset for:", forgotPasswordEmail)
 
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(forgotPasswordEmail, {
-        redirectTo: `https://auth.kongzilla.carterhales.com/auth/v1/callback?type=recovery`,
-      })
+      const { error } = await sendPasswordReset(forgotPasswordEmail)
 
       if (error) {
         console.error("Password reset error:", error)
