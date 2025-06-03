@@ -19,7 +19,7 @@ interface DebugInfo {
   userEmail?: string
   searchParams?: Record<string, string>
   hashParams?: Record<string, string>
-  method?: string
+  sessionMethod?: string
 }
 
 export default function AuthCallbackPage(): JSX.Element {
@@ -53,7 +53,7 @@ export default function AuthCallbackPage(): JSX.Element {
           setStatus("error")
           setMessage("Authentication timed out. Please try again.")
           setDebugInfo({ ...debug, step: "timeout" })
-        }, 15000)
+        }, 20000) // Increased timeout to 20 seconds
 
         // Parse all possible parameters
         const urlSearchParams = new URLSearchParams(window.location.search)
@@ -79,8 +79,6 @@ export default function AuthCallbackPage(): JSX.Element {
         const error = urlSearchParams.get("error") || hashParams.get("error")
         const errorDescription = urlSearchParams.get("error_description") || hashParams.get("error_description")
         const code = urlSearchParams.get("code") || hashParams.get("code")
-        const accessToken = hashParams.get("access_token")
-        const refreshToken = hashParams.get("refresh_token")
 
         debug.type = type
         debug.step = "params_parsed"
@@ -89,8 +87,6 @@ export default function AuthCallbackPage(): JSX.Element {
           type,
           hasError: !!error,
           hasCode: !!code,
-          hasAccessToken: !!accessToken,
-          hasRefreshToken: !!refreshToken,
         })
 
         // Handle errors first
@@ -110,88 +106,68 @@ export default function AuthCallbackPage(): JSX.Element {
           return
         }
 
+        // TRY MULTIPLE SESSION ESTABLISHMENT METHODS
         let sessionData = null
         let sessionError = null
 
-        // Method 1: Check if we already have a session (OAuth flow completed)
-        console.log("AuthCallback: Checking for existing session...")
-        debug.step = "existing_session_check"
-        debug.method = "existing_session"
+        debug.step = "attempting_session_methods"
+        console.log("AuthCallback: Trying multiple session establishment methods...")
 
-        try {
-          const { data, error } = await supabase.auth.getSession()
-          if (!error && data.session) {
-            sessionData = data
-            console.log("AuthCallback: Found existing session for:", data.session.user.email)
-          } else {
-            console.log("AuthCallback: No existing session found")
-          }
-        } catch (err) {
-          console.log("AuthCallback: Error checking existing session:", err)
-        }
-
-        // Method 2: If we have an access token in the hash, use it
-        if (!sessionData && accessToken) {
-          console.log("AuthCallback: Attempting to set session with access token...")
-          debug.step = "set_session_with_token"
-          debug.method = "set_session"
-
+        // Method 1: Exchange code for session (for OAuth flows)
+        if (code && !sessionData) {
           try {
-            const { data, error } = await supabase.auth.setSession({
-              access_token: accessToken,
-              refresh_token: refreshToken || "",
-            })
-
-            if (!error && data.session) {
+            debug.sessionMethod = "exchangeCodeForSession"
+            console.log("AuthCallback: Method 1 - Exchanging code for session...")
+            
+            const { data, error } = await supabase.auth.exchangeCodeForSession(window.location.href)
+            
+            if (!error && data?.session?.user) {
               sessionData = data
-              console.log("AuthCallback: Session set successfully with access token")
-            } else {
-              console.log("AuthCallback: Failed to set session with access token:", error)
+              console.log("AuthCallback: Method 1 SUCCESS - Code exchange worked")
+            } else if (error) {
+              console.log("AuthCallback: Method 1 failed:", error.message)
               sessionError = error
             }
           } catch (err) {
-            console.log("AuthCallback: Exception setting session with access token:", err)
-            sessionError = err
+            console.log("AuthCallback: Method 1 exception:", err)
           }
         }
 
-        // Method 3: Wait a moment and check for session again (OAuth might be processing)
+        // Method 2: Check existing session (user might already be logged in)
         if (!sessionData) {
-          console.log("AuthCallback: Waiting for OAuth to complete...")
-          debug.step = "waiting_for_oauth"
-          debug.method = "wait_and_check"
-
-          await new Promise((resolve) => setTimeout(resolve, 2000))
-
           try {
+            debug.sessionMethod = (debug.sessionMethod || "") + "_getSession"
+            console.log("AuthCallback: Method 2 - Checking existing session...")
+            
             const { data, error } = await supabase.auth.getSession()
-            if (!error && data.session) {
+            
+            if (!error && data?.session?.user) {
               sessionData = data
-              console.log("AuthCallback: Session found after waiting")
+              console.log("AuthCallback: Method 2 SUCCESS - Found existing session")
             } else {
-              console.log("AuthCallback: Still no session after waiting")
+              console.log("AuthCallback: Method 2 failed - No existing session")
             }
           } catch (err) {
-            console.log("AuthCallback: Error checking session after waiting:", err)
+            console.log("AuthCallback: Method 2 exception:", err)
           }
         }
 
-        // Method 4: Try refresh session
+        // Method 3: Refresh session (in case of stale session)
         if (!sessionData) {
-          console.log("AuthCallback: Attempting session refresh...")
-          debug.step = "session_refresh"
-          debug.method = "refresh"
-
           try {
+            debug.sessionMethod = (debug.sessionMethod || "") + "_refreshSession"
+            console.log("AuthCallback: Method 3 - Attempting session refresh...")
+            
             const { data, error } = await supabase.auth.refreshSession()
-            if (!error && data.session) {
+            
+            if (!error && data?.session?.user) {
               sessionData = data
-              console.log("AuthCallback: Session refresh successful")
+              console.log("AuthCallback: Method 3 SUCCESS - Session refresh worked")
             } else {
-              console.log("AuthCallback: Session refresh failed:", error)
+              console.log("AuthCallback: Method 3 failed:", error?.message)
             }
           } catch (err) {
-            console.log("AuthCallback: Session refresh exception:", err)
+            console.log("AuthCallback: Method 3 exception:", err)
           }
         }
 
@@ -199,11 +175,21 @@ export default function AuthCallbackPage(): JSX.Element {
           clearTimeout(timeoutRef.current)
         }
 
-        // If we still don't have a session, show error
-        if (!sessionData || !sessionData.session || !sessionData.user) {
+        // If none of the methods worked, show error
+        if (!sessionData?.session?.user) {
           console.error("AuthCallback: Failed to establish session with any method")
-          debug.step = "all_methods_failed"
-          debug.error = sessionError?.message || "All authentication methods failed"
+          debug.step = "all_session_methods_failed"
+          debug.error = sessionError?.message || "No session established"
+
+          // But check one more time if user is actually logged in
+          const { data: finalCheck } = await supabase.auth.getUser()
+          if (finalCheck?.user) {
+            console.log("AuthCallback: User is actually logged in despite errors, redirecting...")
+            setStatus("success")
+            setMessage("Authentication successful! Redirecting...")
+            setTimeout(() => router.push("/?verified=true"), 1000)
+            return
+          }
 
           setStatus("error")
           setMessage("Authentication failed to establish session. Please try signing in again.")
@@ -211,23 +197,22 @@ export default function AuthCallbackPage(): JSX.Element {
           return
         }
 
-        console.log("AuthCallback: Authentication successful for:", sessionData.user.email)
-        debug.step = "auth_success"
-        debug.userEmail = sessionData.user.email
+        console.log("AuthCallback: Session established successfully for:", sessionData.session.user.email)
+        debug.step = "session_success"
+        debug.userEmail = sessionData.session.user.email
 
         // Determine the login method
-        const loginMethod = sessionData.user.app_metadata?.provider === "google" ? "google" : "email"
+        const loginMethod = sessionData.session.user.app_metadata?.provider === "google" ? "google" : "email"
 
         // Log the successful authentication with profile update
         try {
           const { logAccessWithProfile } = await import("@/lib/auth")
-          await logAccessWithProfile(sessionData.user, loginMethod, {
-            sessionType: type === "recovery" ? "password_recovery" : "oauth_login",
+          await logAccessWithProfile(sessionData.session.user, loginMethod, {
+            sessionType: type === "recovery" ? "password_recovery" : "oauth_callback",
           })
           debug.step = "access_logged"
         } catch (logError) {
           console.warn("AuthCallback: Failed to log access, but continuing:", logError)
-          // Don't fail the auth flow for logging errors
         }
 
         setStatus("success")
@@ -246,7 +231,7 @@ export default function AuthCallbackPage(): JSX.Element {
         // Redirect to the main app after showing success message
         setTimeout(() => {
           if (type === "recovery") {
-            router.push("/auth/reset-password?verified=true")
+            router.push("/auth/reset-password?from=recovery&verified=true")
           } else {
             router.push("/?verified=true")
           }
@@ -256,6 +241,20 @@ export default function AuthCallbackPage(): JSX.Element {
 
         if (timeoutRef.current) {
           clearTimeout(timeoutRef.current)
+        }
+
+        // Final fallback check if user is actually logged in
+        try {
+          const { data: emergencyCheck } = await supabase.auth.getUser()
+          if (emergencyCheck?.user) {
+            console.log("AuthCallback: Emergency check found user is logged in, redirecting...")
+            setStatus("success")
+            setMessage("Authentication successful! Redirecting...")
+            setTimeout(() => router.push("/?verified=true"), 1000)
+            return
+          }
+        } catch (emergencyErr) {
+          console.error("AuthCallback: Emergency check also failed:", emergencyErr)
         }
 
         setStatus("error")
@@ -283,11 +282,9 @@ export default function AuthCallbackPage(): JSX.Element {
     setIsResending(true)
 
     try {
-      // Get current session to resend for current user
       const { data: sessionData } = await supabase.auth.getSession()
 
       if (!sessionData.session?.user?.email) {
-        // If no session, redirect to login/signup
         router.push("/login?message=Please sign up again to receive a new verification email")
         return
       }
@@ -317,6 +314,11 @@ export default function AuthCallbackPage(): JSX.Element {
 
   const handleGoToLogin = (): void => {
     router.push("/login?message=Please sign in with your verified account")
+  }
+
+  const handleForceRedirect = (): void => {
+    // Force redirect to dashboard since user is likely logged in
+    router.push("/?force=true")
   }
 
   const renderStatusIcon = (): JSX.Element => {
@@ -388,9 +390,7 @@ export default function AuthCallbackPage(): JSX.Element {
 
             {/* Loading state */}
             {status === "loading" && debugInfo?.step && process.env.NODE_ENV === "development" && (
-              <p className="text-xs text-slate-500">
-                Step: {debugInfo.step} | Method: {debugInfo.method}
-              </p>
+              <p className="text-xs text-slate-500">Step: {debugInfo.step}</p>
             )}
 
             {/* Success state with redirect indicator */}
@@ -443,11 +443,37 @@ export default function AuthCallbackPage(): JSX.Element {
               </div>
             )}
 
-            {/* Error state */}
+            {/* Error state with multiple options */}
             {status === "error" && (
               <div className="w-full space-y-3">
-                <Button onClick={handleReturnToLogin} variant="outline" className="w-full">
-                  Return to Login
+                <Alert>
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>
+                    If you can access the dashboard after clicking "Return to Login", the authentication actually worked.
+                  </AlertDescription>
+                </Alert>
+                
+                <div className="flex gap-2">
+                  <Button onClick={handleForceRedirect} className="flex-1">
+                    Try Dashboard
+                  </Button>
+                  <Button onClick={handleReturnToLogin} variant="outline" className="flex-1">
+                    Return to Login
+                  </Button>
+                </div>
+                
+                <Button onClick={handleResendVerification} disabled={isResending} variant="ghost" className="w-full">
+                  {isResending ? (
+                    <>
+                      <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                      Sending New Link...
+                    </>
+                  ) : (
+                    <>
+                      <Mail className="h-4 w-4 mr-2" />
+                      Request New Verification Email
+                    </>
+                  )}
                 </Button>
               </div>
             )}
