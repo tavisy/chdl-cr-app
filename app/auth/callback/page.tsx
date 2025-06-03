@@ -20,6 +20,8 @@ interface DebugInfo {
   searchParams?: Record<string, string>
   hashParams?: Record<string, string>
   sessionMethod?: string
+  requireReset?: boolean
+  recoveryState?: boolean
 }
 
 export default function AuthCallbackPage(): JSX.Element {
@@ -53,7 +55,7 @@ export default function AuthCallbackPage(): JSX.Element {
           setStatus("error")
           setMessage("Authentication timed out. Please try again.")
           setDebugInfo({ ...debug, step: "timeout" })
-        }, 20000) // Increased timeout to 20 seconds
+        }, 20000) // 20 seconds timeout
 
         // Parse all possible parameters
         const urlSearchParams = new URLSearchParams(window.location.search)
@@ -74,19 +76,33 @@ export default function AuthCallbackPage(): JSX.Element {
         debug.searchParams = searchParamsObj
         debug.hashParams = hashParamsObj
 
-        // Get callback type and other parameters
+        // Get callback type and recovery parameters
         const type = urlSearchParams.get("type") || hashParams.get("type")
         const error = urlSearchParams.get("error") || hashParams.get("error")
         const errorDescription = urlSearchParams.get("error_description") || hashParams.get("error_description")
         const code = urlSearchParams.get("code") || hashParams.get("code")
+        const requireReset = urlSearchParams.get("require_reset") === "true"
+
+        // Check for recovery state from sessionStorage
+        let recoveryState = false
+        try {
+          const { checkAndClearRecoveryState } = await import("@/lib/auth")
+          recoveryState = checkAndClearRecoveryState()
+        } catch (err) {
+          console.warn("AuthCallback: Could not check recovery state:", err)
+        }
 
         debug.type = type
+        debug.requireReset = requireReset
+        debug.recoveryState = recoveryState
         debug.step = "params_parsed"
 
         console.log("AuthCallback: Parsed parameters:", {
           type,
           hasError: !!error,
           hasCode: !!code,
+          requireReset,
+          recoveryState,
         })
 
         // Handle errors first
@@ -185,6 +201,14 @@ export default function AuthCallbackPage(): JSX.Element {
           const { data: finalCheck } = await supabase.auth.getUser()
           if (finalCheck?.user) {
             console.log("AuthCallback: User is actually logged in despite errors, redirecting...")
+            
+            // Even if session establishment failed, check for recovery requirements
+            if (type === "recovery" || requireReset || recoveryState) {
+              console.log("AuthCallback: Recovery flow detected despite session issues, redirecting to reset")
+              setTimeout(() => router.push("/auth/reset-password?from=recovery&require_reset=true"), 1000)
+              return
+            }
+            
             setStatus("success")
             setMessage("Authentication successful! Redirecting...")
             setTimeout(() => router.push("/?verified=true"), 1000)
@@ -209,6 +233,7 @@ export default function AuthCallbackPage(): JSX.Element {
           const { logAccessWithProfile } = await import("@/lib/auth")
           await logAccessWithProfile(sessionData.session.user, loginMethod, {
             sessionType: type === "recovery" ? "password_recovery" : "oauth_callback",
+            recoveryFlow: type === "recovery" || requireReset || recoveryState,
           })
           debug.step = "access_logged"
         } catch (logError) {
@@ -217,10 +242,24 @@ export default function AuthCallbackPage(): JSX.Element {
 
         setStatus("success")
 
-        // Set appropriate success message based on type
-        if (type === "recovery") {
-          setMessage("Password reset successful! You can now access your account.")
-        } else if (loginMethod === "google") {
+        // ENHANCED RECOVERY FLOW DETECTION AND ROUTING
+        const isRecoveryFlow = type === "recovery" || requireReset || recoveryState
+        
+        if (isRecoveryFlow) {
+          console.log("AuthCallback: Recovery flow detected - routing to password reset")
+          setMessage("Password reset link verified! You must now set a new password to continue.")
+          
+          setDebugInfo(debug)
+
+          // Always redirect to password reset for recovery flows
+          setTimeout(() => {
+            router.push("/auth/reset-password?from=recovery&verified=true&require_reset=true")
+          }, 2000)
+          return
+        }
+
+        // Set appropriate success message for non-recovery flows
+        if (loginMethod === "google") {
           setMessage("Google sign-in successful! Welcome to the Crown Royal Strategic Report.")
         } else {
           setMessage("Email verified successfully! You can now access the Crown Royal Strategic Report.")
@@ -228,14 +267,11 @@ export default function AuthCallbackPage(): JSX.Element {
 
         setDebugInfo(debug)
 
-        // Redirect to the main app after showing success message
+        // Redirect to the main app for non-recovery flows
         setTimeout(() => {
-          if (type === "recovery") {
-            router.push("/auth/reset-password?from=recovery&verified=true")
-          } else {
-            router.push("/?verified=true")
-          }
+          router.push("/?verified=true")
         }, 2000)
+
       } catch (err) {
         console.error("AuthCallback: Unexpected callback error:", err)
 
@@ -247,7 +283,30 @@ export default function AuthCallbackPage(): JSX.Element {
         try {
           const { data: emergencyCheck } = await supabase.auth.getUser()
           if (emergencyCheck?.user) {
-            console.log("AuthCallback: Emergency check found user is logged in, redirecting...")
+            console.log("AuthCallback: Emergency check found user is logged in")
+            
+            // Check for recovery requirements even in emergency scenarios
+            const urlSearchParams = new URLSearchParams(window.location.search)
+            const type = urlSearchParams.get("type")
+            const requireReset = urlSearchParams.get("require_reset") === "true"
+            
+            let recoveryState = false
+            try {
+              const { checkAndClearRecoveryState } = await import("@/lib/auth")
+              recoveryState = checkAndClearRecoveryState()
+            } catch (recoveryErr) {
+              console.warn("AuthCallback: Emergency recovery check failed:", recoveryErr)
+            }
+            
+            if (type === "recovery" || requireReset || recoveryState) {
+              console.log("AuthCallback: Emergency scenario but recovery required, redirecting to reset")
+              setStatus("success")
+              setMessage("Authentication successful! You must reset your password to continue.")
+              setTimeout(() => router.push("/auth/reset-password?from=recovery&require_reset=true"), 1000)
+              return
+            }
+            
+            console.log("AuthCallback: Emergency scenario, redirecting to dashboard")
             setStatus("success")
             setMessage("Authentication successful! Redirecting...")
             setTimeout(() => router.push("/?verified=true"), 1000)
@@ -317,8 +376,18 @@ export default function AuthCallbackPage(): JSX.Element {
   }
 
   const handleForceRedirect = (): void => {
-    // Force redirect to dashboard since user is likely logged in
-    router.push("/?force=true")
+    // Check if this might be a recovery flow before forcing redirect
+    const urlSearchParams = new URLSearchParams(window.location.search)
+    const type = urlSearchParams.get("type")
+    const requireReset = urlSearchParams.get("require_reset") === "true"
+    
+    if (type === "recovery" || requireReset) {
+      console.log("AuthCallback: Force redirect but recovery detected, going to reset password")
+      router.push("/auth/reset-password?from=recovery&require_reset=true")
+    } else {
+      console.log("AuthCallback: Force redirect to dashboard")
+      router.push("/?force=true")
+    }
   }
 
   const renderStatusIcon = (): JSX.Element => {
@@ -449,7 +518,7 @@ export default function AuthCallbackPage(): JSX.Element {
                 <Alert>
                   <AlertCircle className="h-4 w-4" />
                   <AlertDescription>
-                    If you can access the dashboard after clicking "Return to Login", the authentication actually worked.
+                    If you can access the dashboard after clicking "Try Dashboard", the authentication actually worked.
                   </AlertDescription>
                 </Alert>
                 

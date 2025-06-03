@@ -25,6 +25,18 @@ interface PasswordValidation {
   requirements: PasswordRequirement[]
 }
 
+interface SessionValidationInfo {
+  hasUser: boolean
+  sessionAge: number
+  maxSessionAge: number
+  fromRecovery: boolean
+  securityCheck: boolean
+  requireReset: boolean
+  recoveryState: boolean
+  isValidSession: boolean
+  userEmail?: string
+}
+
 export default function ResetPasswordPage(): JSX.Element {
   const [password, setPassword] = useState<string>("")
   const [confirmPassword, setConfirmPassword] = useState<string>("")
@@ -36,6 +48,7 @@ export default function ResetPasswordPage(): JSX.Element {
   const [user, setUser] = useState<User | null>(null)
   const [sessionValidated, setSessionValidated] = useState<boolean>(false)
   const [sessionError, setSessionError] = useState<string>("")
+  const [sessionInfo, setSessionInfo] = useState<SessionValidationInfo | null>(null)
   
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -100,18 +113,36 @@ export default function ResetPasswordPage(): JSX.Element {
     return passwordValidation.isValid && passwordsMatch && !loading
   }, [passwordValidation.isValid, passwordsMatch, loading])
 
-  // Session validation effect - Enhanced for stricter recovery validation
+  // Enhanced session validation with stricter recovery requirements
   useEffect(() => {
     let mounted = true
 
     const validateSession = async (): Promise<void> => {
       try {
-        console.log("ResetPassword: Validating session...")
+        console.log("ResetPassword: Starting enhanced session validation...")
 
-        // Check if user came from recovery flow or security check
+        // Parse URL parameters for recovery indicators
         const fromRecovery = searchParams.get("from") === "recovery"
         const securityCheck = searchParams.get("security") === "check"
-        console.log("ResetPassword: From recovery flow:", fromRecovery, "Security check:", securityCheck)
+        const requireReset = searchParams.get("require_reset") === "true"
+        const verified = searchParams.get("verified") === "true"
+
+        console.log("ResetPassword: URL parameters:", {
+          fromRecovery,
+          securityCheck,
+          requireReset,
+          verified
+        })
+
+        // Check for recovery state from sessionStorage
+        let recoveryState = false
+        try {
+          const { checkAndClearRecoveryState } = await import("@/lib/auth")
+          recoveryState = checkAndClearRecoveryState()
+          console.log("ResetPassword: Recovery state from sessionStorage:", recoveryState)
+        } catch (err) {
+          console.warn("ResetPassword: Could not check recovery state:", err)
+        }
 
         const currentUser = await getCurrentUser()
 
@@ -123,42 +154,88 @@ export default function ResetPasswordPage(): JSX.Element {
           return
         }
 
-        // For recovery or security check flows, always require password reset
-        if (fromRecovery || securityCheck) {
-          // Verify the session is very recent (within last 5 minutes for tighter security)
-          const sessionAge = Date.now() - new Date(currentUser.last_sign_in_at || 0).getTime()
-          const maxSessionAge = 5 * 60 * 1000 // 5 minutes
+        // Calculate session age
+        const sessionAge = Date.now() - new Date(currentUser.last_sign_in_at || 0).getTime()
+        const maxSessionAge = 2 * 60 * 1000 // 2 minutes for stricter security
 
-          if (sessionAge > maxSessionAge) {
-            console.log("ResetPassword: Session too old for password reset")
-            if (mounted) {
-              setSessionError("Password reset session has expired. Please request a new reset link.")
-            }
-            return
-          }
+        const sessionValidationInfo: SessionValidationInfo = {
+          hasUser: true,
+          sessionAge,
+          maxSessionAge,
+          fromRecovery,
+          securityCheck,
+          requireReset,
+          recoveryState,
+          isValidSession: false,
+          userEmail: currentUser.email || undefined
+        }
 
-          // For security checks, show a warning about forced password reset
-          if (securityCheck && mounted) {
-            setError("For security purposes, you must reset your password to continue.")
-          }
-        } else {
-          // If not from recovery, verify user should be here
-          console.log("ResetPassword: Direct access - verifying legitimacy")
+        console.log("ResetPassword: Session validation info:", sessionValidationInfo)
+
+        // STRICT VALIDATION: Must have at least one recovery indicator
+        const hasRecoveryIndicator = fromRecovery || securityCheck || requireReset || recoveryState
+
+        if (!hasRecoveryIndicator) {
+          console.log("ResetPassword: No recovery indicators found - blocking direct access")
           if (mounted) {
-            setSessionError("Direct access not allowed. Please use a password reset link.")
+            setSessionError("Invalid access. Please use a password reset link from your email.")
+            setSessionInfo(sessionValidationInfo)
           }
           return
         }
 
-        console.log("ResetPassword: Valid session found for:", currentUser.email)
+        // For recovery flows with sessionStorage state, be more lenient with time
+        const isRecoveryStateValid = recoveryState && sessionAge < 10 * 60 * 1000 // 10 minutes for sessionStorage
+        const isUrlParamValid = (fromRecovery || requireReset) && sessionAge < maxSessionAge // 2 minutes for URL params
+
+        if (!isRecoveryStateValid && !isUrlParamValid) {
+          console.log("ResetPassword: Session too old for password reset", {
+            sessionAge: Math.round(sessionAge / 1000),
+            maxAllowed: Math.round(maxSessionAge / 1000),
+            recoveryState,
+            isRecoveryStateValid,
+            isUrlParamValid
+          })
+          
+          if (mounted) {
+            setSessionError("Password reset session has expired. Please request a new reset link.")
+            setSessionInfo(sessionValidationInfo)
+          }
+          return
+        }
+
+        sessionValidationInfo.isValidSession = true
+
+        console.log("ResetPassword: Valid recovery session found for:", currentUser.email)
+        
         if (mounted) {
           setUser(currentUser)
           setSessionValidated(true)
+          setSessionInfo(sessionValidationInfo)
+
+          // Set appropriate warning messages based on recovery type
+          if (securityCheck) {
+            setError("For security purposes, you must reset your password to continue.")
+          } else if (fromRecovery || requireReset) {
+            setError("You must reset your password to continue accessing your account.")
+          } else if (recoveryState) {
+            setError("Complete your password reset to secure your account.")
+          }
         }
       } catch (err) {
         console.error("ResetPassword: Error validating session:", err)
         if (mounted) {
           setSessionError("Error validating session. Please try again.")
+          setSessionInfo({
+            hasUser: false,
+            sessionAge: 0,
+            maxSessionAge: 0,
+            fromRecovery: false,
+            securityCheck: false,
+            requireReset: false,
+            recoveryState: false,
+            isValidSession: false
+          })
         }
       }
     }
@@ -170,7 +247,7 @@ export default function ResetPasswordPage(): JSX.Element {
     }
   }, [searchParams])
 
-  // Handle password update
+  // Enhanced password update with recovery state cleanup
   const handlePasswordUpdate = useCallback(async (e: React.FormEvent<HTMLFormElement>): Promise<void> => {
     e.preventDefault()
     
@@ -202,9 +279,18 @@ export default function ResetPasswordPage(): JSX.Element {
         }
       } else {
         console.log("ResetPassword: Password updated successfully")
+        
+        // Clear recovery state and form data for security
+        try {
+          if (typeof window !== "undefined") {
+            sessionStorage.removeItem("password_reset_initiated")
+            console.log("ResetPassword: Recovery state cleared after successful update")
+          }
+        } catch (cleanupError) {
+          console.warn("ResetPassword: Failed to clear recovery state:", cleanupError)
+        }
+        
         setSuccess(true)
-
-        // Clear form data for security
         setPassword("")
         setConfirmPassword("")
 
@@ -222,11 +308,31 @@ export default function ResetPasswordPage(): JSX.Element {
   }, [password, isFormValid, router])
 
   const handleReturnToLogin = (): void => {
+    // Clear any recovery state when returning to login
+    try {
+      if (typeof window !== "undefined") {
+        sessionStorage.removeItem("password_reset_initiated")
+      }
+    } catch (error) {
+      console.warn("Failed to clear recovery state:", error)
+    }
     router.push("/login")
   }
 
   const handleGoBack = (): void => {
     router.back()
+  }
+
+  const handleRequestNewLink = (): void => {
+    // Clear recovery state and redirect to login with message
+    try {
+      if (typeof window !== "undefined") {
+        sessionStorage.removeItem("password_reset_initiated")
+      }
+    } catch (error) {
+      console.warn("Failed to clear recovery state:", error)
+    }
+    router.push("/login?message=Please request a new password reset link")
   }
 
   // Loading state
@@ -237,7 +343,7 @@ export default function ResetPasswordPage(): JSX.Element {
           <CardContent className="flex flex-col items-center justify-center p-8">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600 mb-4"></div>
             <p className="text-slate-600">Validating your session...</p>
-            <p className="text-sm text-slate-500 mt-2">This should only take a moment</p>
+            <p className="text-sm text-slate-500 mt-2">Checking recovery permissions</p>
           </CardContent>
         </Card>
       </div>
@@ -299,10 +405,34 @@ export default function ResetPasswordPage(): JSX.Element {
               <AlertCircle className="h-4 w-4" />
               <AlertDescription>{sessionError}</AlertDescription>
             </Alert>
+
+            {/* Enhanced error details for development */}
+            {sessionInfo && process.env.NODE_ENV === "development" && (
+              <Alert>
+                <Shield className="h-4 w-4" />
+                <AlertDescription>
+                  <details className="mt-2">
+                    <summary className="cursor-pointer font-medium">Debug Info</summary>
+                    <div className="mt-2 text-xs">
+                      <div>User: {sessionInfo.hasUser ? "Present" : "None"}</div>
+                      <div>Email: {sessionInfo.userEmail || "N/A"}</div>
+                      <div>Session Age: {Math.round(sessionInfo.sessionAge / 1000)}s</div>
+                      <div>Max Age: {Math.round(sessionInfo.maxSessionAge / 1000)}s</div>
+                      <div>From Recovery: {sessionInfo.fromRecovery ? "Yes" : "No"}</div>
+                      <div>Security Check: {sessionInfo.securityCheck ? "Yes" : "No"}</div>
+                      <div>Require Reset: {sessionInfo.requireReset ? "Yes" : "No"}</div>
+                      <div>Recovery State: {sessionInfo.recoveryState ? "Yes" : "No"}</div>
+                      <div>Valid Session: {sessionInfo.isValidSession ? "Yes" : "No"}</div>
+                    </div>
+                  </details>
+                </AlertDescription>
+              </Alert>
+            )}
+
             <div className="flex gap-2">
-              <Button onClick={handleGoBack} variant="outline" className="flex-1">
+              <Button onClick={handleRequestNewLink} variant="outline" className="flex-1">
                 <ArrowLeft className="h-4 w-4 mr-2" />
-                Go Back
+                Request New Link
               </Button>
               <Button onClick={handleReturnToLogin} className="flex-1">
                 Return to Login
@@ -333,6 +463,19 @@ export default function ResetPasswordPage(): JSX.Element {
           </CardHeader>
           
           <CardContent>
+            {/* Security notice for recovery flows */}
+            {sessionInfo && (sessionInfo.fromRecovery || sessionInfo.requireReset || sessionInfo.securityCheck) && (
+              <Alert className="mb-4">
+                <Shield className="h-4 w-4" />
+                <AlertDescription>
+                  {sessionInfo.securityCheck 
+                    ? "Security check required. You must reset your password to continue."
+                    : "Password reset required. This is for your account security."
+                  }
+                </AlertDescription>
+              </Alert>
+            )}
+
             <form onSubmit={handlePasswordUpdate} className="space-y-4">
               {/* New Password Field */}
               <div className="space-y-2">
@@ -487,7 +630,7 @@ export default function ResetPasswordPage(): JSX.Element {
 
               {/* Error Display */}
               {error && (
-                <Alert variant="destructive">
+                <Alert variant={error.includes("security") || error.includes("must reset") ? "default" : "destructive"}>
                   <AlertCircle className="h-4 w-4" />
                   <AlertDescription>{error}</AlertDescription>
                 </Alert>

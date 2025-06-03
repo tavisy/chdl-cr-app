@@ -1,4 +1,4 @@
-// @/lib/auth.ts - Complete auth library with all required exports and custom OAuth domain support
+// @/lib/auth.ts - Complete auth library with all required exports
 
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"
 import type { User } from "@supabase/supabase-js"
@@ -77,6 +77,49 @@ export function needsEmailVerification(user: User): boolean {
 
   // Email users need verification if email is not confirmed
   return !user.email_confirmed_at
+}
+
+/**
+ * Set recovery state flag to track password reset flow
+ */
+export function setRecoveryState(): void {
+  if (typeof window !== "undefined") {
+    try {
+      sessionStorage.setItem("password_reset_initiated", Date.now().toString())
+      console.log("Recovery state flag set")
+    } catch (error) {
+      console.warn("Failed to set recovery state:", error)
+    }
+  }
+}
+
+/**
+ * Check and clear recovery state
+ */
+export function checkAndClearRecoveryState(): boolean {
+  if (typeof window === "undefined") return false
+  
+  try {
+    const recoveryTime = sessionStorage.getItem("password_reset_initiated")
+    if (recoveryTime) {
+      const timeDiff = Date.now() - parseInt(recoveryTime)
+      const isValid = timeDiff < 10 * 60 * 1000 // 10 minutes
+      
+      if (isValid) {
+        sessionStorage.removeItem("password_reset_initiated")
+        console.log("Recovery state validated and cleared")
+        return true
+      } else {
+        // Clear expired recovery state
+        sessionStorage.removeItem("password_reset_initiated")
+        console.log("Recovery state expired, cleared")
+      }
+    }
+  } catch (error) {
+    console.warn("Failed to check recovery state:", error)
+  }
+  
+  return false
 }
 
 /**
@@ -286,15 +329,14 @@ export async function resendConfirmation(email: string): Promise<{ error?: any }
 }
 
 /**
- * Send password reset email - FIXED for custom OAuth domain
+ * Send password reset email
  */
 export async function sendPasswordReset(email: string): Promise<{ error?: any }> {
   try {
     console.log("Sending password reset email for:", email)
 
-    // Use your custom OAuth domain for password reset
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `https://auth.kongzilla.carterhales.com/auth/v1/callback?type=recovery`,
+      redirectTo: `${window.location.origin}/auth/callback?type=recovery&require_reset=true`,
     })
 
     if (error) {
@@ -303,6 +345,10 @@ export async function sendPasswordReset(email: string): Promise<{ error?: any }>
     }
 
     console.log("Password reset email sent successfully")
+    
+    // Set recovery state flag to track the password reset flow
+    setRecoveryState()
+    
     return {}
   } catch (error) {
     console.error("Exception sending password reset:", error)
@@ -311,7 +357,7 @@ export async function sendPasswordReset(email: string): Promise<{ error?: any }>
 }
 
 /**
- * Sign up with email and password - FIXED for custom OAuth domain
+ * Sign up with email and password
  */
 export async function signUpWithEmail(
   email: string,
@@ -328,7 +374,7 @@ export async function signUpWithEmail(
         data: {
           full_name: metadata?.fullName || null,
         },
-        // Use your actual app domain for email verification
+        // Use callback URL for proper flow
         emailRedirectTo: `${window.location.origin}/auth/callback`,
       },
     })
@@ -340,6 +386,7 @@ export async function signUpWithEmail(
 
     if (data.user) {
       console.log("User signed up successfully:", data.user.email)
+
       // Don't log access here since email needs to be verified first
       return { user: data.user }
     }
@@ -387,22 +434,19 @@ export async function signInWithEmail(email: string, password: string): Promise<
 }
 
 /**
- * Sign in with Google - FIXED for optimal PKCE flow
+ * Sign in with Google
  */
 export async function signInWithGoogle(): Promise<{ error?: any }> {
   try {
-    console.log("Initiating Google sign in with optimized PKCE flow...")
+    console.log("Initiating Google sign in...")
 
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
-        // Redirect to our app after OAuth completes
         redirectTo: `${window.location.origin}/auth/callback`,
         queryParams: {
-          // Use "online" for better PKCE compatibility
-          access_type: "online",
-          // Remove prompt to avoid PKCE issues
-          // prompt: "consent" // Commented out as it can interfere with PKCE
+          access_type: "offline",
+          prompt: "consent",
         },
       },
     })
@@ -412,8 +456,7 @@ export async function signInWithGoogle(): Promise<{ error?: any }> {
       return { error }
     }
 
-    console.log("Google sign-in initiated successfully")
-    // OAuth redirect happens automatically
+    // OAuth redirect happens here, so no return needed
     return {}
   } catch (error) {
     console.error("Exception during Google sign in:", error)
@@ -438,6 +481,17 @@ export async function updatePassword(newPassword: string): Promise<{ error?: any
     }
 
     console.log("Password updated successfully")
+    
+    // Clear any recovery state since password has been successfully updated
+    if (typeof window !== "undefined") {
+      try {
+        sessionStorage.removeItem("password_reset_initiated")
+        console.log("Recovery state cleared after successful password update")
+      } catch (error) {
+        console.warn("Failed to clear recovery state:", error)
+      }
+    }
+    
     return {}
   } catch (error) {
     console.error("Exception updating password:", error)
@@ -472,7 +526,7 @@ export function isAdmin(user: User): boolean {
 
   const adminEmails = ["tav@bignerdlsolutions.com", "tavis@gmail.com", "tavisy@gmail.com", "tavisadmin@carterhales.com"]
 
-  const adminDomains = ["@carterhales", "@bignerdsolutions"]
+  const adminDomains = ["@carterhales", "@bignerd"]
 
   // Check exact email matches
   if (adminEmails.includes(user.email)) return true
@@ -506,6 +560,16 @@ export async function signOut(): Promise<void> {
       console.error("Error signing out:", error)
     } else {
       console.log("User signed out successfully")
+      
+      // Clear any recovery state on sign out
+      if (typeof window !== "undefined") {
+        try {
+          sessionStorage.removeItem("password_reset_initiated")
+        } catch (error) {
+          console.warn("Failed to clear recovery state on sign out:", error)
+        }
+      }
+      
       // Redirect to login page
       if (typeof window !== "undefined") {
         window.location.href = "/login"

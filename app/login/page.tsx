@@ -7,9 +7,9 @@ import {
   signUpWithEmail,
   signInWithGoogle,
   resendConfirmation,
-  sendPasswordReset, // FIXED: Import sendPasswordReset instead of using supabase directly
   hasVerifiedAccess,
   needsEmailVerification,
+  setRecoveryState,
 } from "@/lib/auth"
 import { supabase } from "@/lib/supabase"
 import { Button } from "@/components/ui/button"
@@ -18,7 +18,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Label } from "@/components/ui/label"
-import { Mail, CheckCircle, AlertCircle, Bug } from "lucide-react"
+import { Mail, CheckCircle, AlertCircle, Bug, Shield, Eye, EyeOff } from "lucide-react"
 import type { User } from "@supabase/supabase-js"
 
 interface DebugInfo {
@@ -50,10 +50,21 @@ interface DebugInfo {
     hasData: boolean
     error?: string
   }
+  passwordResetAttempt?: {
+    email: string
+    error?: string
+    recoveryState?: boolean
+  }
   sessionError?: string
   checkAuthError?: string
   googleSignInError?: string
   [key: string]: any
+}
+
+interface PasswordRequirement {
+  label: string
+  test: (password: string) => boolean
+  met: boolean
 }
 
 export default function LoginPage(): JSX.Element {
@@ -71,6 +82,44 @@ export default function LoginPage(): JSX.Element {
   const router = useRouter()
   const [showForgotPassword, setShowForgotPassword] = useState<boolean>(false)
   const [forgotPasswordEmail, setForgotPasswordEmail] = useState<string>("")
+  const [showPassword, setShowPassword] = useState<boolean>(false)
+  const [showPasswordRequirements, setShowPasswordRequirements] = useState<boolean>(false)
+
+  // Password validation for sign up
+  const passwordRequirements: PasswordRequirement[] = useMemo(() => [
+    {
+      label: "At least 8 characters",
+      test: (pwd) => pwd.length >= 8,
+      met: password.length >= 8
+    },
+    {
+      label: "One lowercase letter",
+      test: (pwd) => /(?=.*[a-z])/.test(pwd),
+      met: /(?=.*[a-z])/.test(password)
+    },
+    {
+      label: "One uppercase letter", 
+      test: (pwd) => /(?=.*[A-Z])/.test(pwd),
+      met: /(?=.*[A-Z])/.test(password)
+    },
+    {
+      label: "One number",
+      test: (pwd) => /(?=.*\d)/.test(pwd),
+      met: /(?=.*\d)/.test(password)
+    },
+    {
+      label: "One special character",
+      test: (pwd) => /(?=.*[@$!%*?&])/.test(pwd),
+      met: /(?=.*[@$!%*?&])/.test(password)
+    }
+  ], [password])
+
+  const passwordStrength = useMemo(() => {
+    const metCount = passwordRequirements.filter(req => req.met).length
+    const score = (metCount / passwordRequirements.length) * 100
+    const isValid = passwordRequirements.every(req => req.met)
+    return { score, isValid, metCount }
+  }, [passwordRequirements])
 
   // Memoized access check to prevent excessive logging
   const userHasAccess = useMemo(() => {
@@ -236,6 +285,13 @@ export default function LoginPage(): JSX.Element {
     setError("")
     setMessage("")
 
+    // Validate password requirements
+    if (!passwordStrength.isValid) {
+      setError("Please ensure your password meets all requirements.")
+      setLoading(false)
+      return
+    }
+
     console.log("Attempting sign up for:", email)
 
     try {
@@ -331,8 +387,8 @@ export default function LoginPage(): JSX.Element {
         setLoading(false)
       } else {
         console.log("Google sign in initiated successfully, redirecting...")
-        // Don't set loading to false on success as we're redirecting
       }
+      // Don't set loading to false on success as we're redirecting
     } catch (err) {
       console.error("Google sign in exception:", err)
       setError("Failed to connect to Google. Please try again or use email sign-in.")
@@ -341,7 +397,6 @@ export default function LoginPage(): JSX.Element {
     }
   }
 
-  // FIXED: Use sendPasswordReset from auth.ts instead of direct supabase call
   const handleForgotPassword = async (e: React.FormEvent<HTMLFormElement>): Promise<void> => {
     e.preventDefault()
     setLoading(true)
@@ -351,20 +406,54 @@ export default function LoginPage(): JSX.Element {
     console.log("Attempting password reset for:", forgotPasswordEmail)
 
     try {
-      const { error } = await sendPasswordReset(forgotPasswordEmail)
+      // Set recovery state before sending reset email
+      setRecoveryState()
+      
+      const { error } = await supabase.auth.resetPasswordForEmail(forgotPasswordEmail, {
+        redirectTo: `${window.location.origin}/auth/callback?type=recovery&require_reset=true`,
+      })
+
+      const resetDebug = {
+        email: forgotPasswordEmail,
+        error: error?.message,
+        recoveryState: true,
+      }
+
+      setDebugInfo((prev) => ({
+        ...prev,
+        passwordResetAttempt: resetDebug,
+      }))
 
       if (error) {
         console.error("Password reset error:", error)
         setError(error.message)
+        
+        // Clear recovery state if email sending failed
+        try {
+          if (typeof window !== "undefined") {
+            sessionStorage.removeItem("password_reset_initiated")
+          }
+        } catch (clearError) {
+          console.warn("Failed to clear recovery state after error:", clearError)
+        }
       } else {
-        console.log("Password reset email sent successfully")
-        setMessage("Password reset email sent! Please check your inbox and follow the instructions.")
+        console.log("Password reset email sent successfully with recovery state set")
+        setMessage("Password reset email sent! Please check your inbox and follow the instructions to reset your password.")
         setShowForgotPassword(false)
         setForgotPasswordEmail("")
       }
     } catch (err) {
       console.error("Password reset exception:", err)
       setError("Failed to send password reset email. Please try again.")
+      
+      // Clear recovery state on exception
+      try {
+        if (typeof window !== "undefined") {
+          sessionStorage.removeItem("password_reset_initiated")
+        }
+      } catch (clearError) {
+        console.warn("Failed to clear recovery state after exception:", clearError)
+      }
     } finally {
       setLoading(false)
     }
@@ -384,6 +473,20 @@ export default function LoginPage(): JSX.Element {
     setPendingEmail("")
     setShowForgotPassword(false)
     setForgotPasswordEmail("")
+    setShowPassword(false)
+    setShowPasswordRequirements(false)
+  }
+
+  const getPasswordStrengthColor = (score: number): string => {
+    if (score < 40) return "text-red-600"
+    if (score < 70) return "text-yellow-600"
+    return "text-green-600"
+  }
+
+  const getPasswordStrengthText = (score: number): string => {
+    if (score < 40) return "Weak"
+    if (score < 70) return "Medium"
+    return "Strong"
   }
 
   return (
@@ -423,16 +526,34 @@ export default function LoginPage(): JSX.Element {
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="signin-password">Password</Label>
-                    <Input
-                      id="signin-password"
-                      type="password"
-                      placeholder="Enter your password"
-                      value={password}
-                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPassword(e.target.value)}
-                      required
-                      disabled={loading}
-                      autoComplete="current-password"
-                    />
+                    <div className="relative">
+                      <Input
+                        id="signin-password"
+                        type={showPassword ? "text" : "password"}
+                        placeholder="Enter your password"
+                        value={password}
+                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPassword(e.target.value)}
+                        required
+                        disabled={loading}
+                        autoComplete="current-password"
+                        className="pr-10"
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                        onClick={() => setShowPassword(!showPassword)}
+                        disabled={loading}
+                        aria-label={showPassword ? "Hide password" : "Show password"}
+                      >
+                        {showPassword ? (
+                          <EyeOff className="h-4 w-4 text-gray-500" />
+                        ) : (
+                          <Eye className="h-4 w-4 text-gray-500" />
+                        )}
+                      </Button>
+                    </div>
                   </div>
                   <Button type="submit" className="w-full" disabled={loading}>
                     {loading ? "Signing in..." : "Sign In"}
@@ -480,29 +601,102 @@ export default function LoginPage(): JSX.Element {
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="signup-password">Password</Label>
-                    <Input
-                      id="signup-password"
-                      type="password"
-                      placeholder="Create a password (min. 6 characters)"
-                      value={password}
-                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPassword(e.target.value)}
-                      required
-                      minLength={6}
-                      disabled={loading}
-                      autoComplete="new-password"
-                    />
+                    <div className="relative">
+                      <Input
+                        id="signup-password"
+                        type={showPassword ? "text" : "password"}
+                        placeholder="Create a secure password"
+                        value={password}
+                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPassword(e.target.value)}
+                        onFocus={() => setShowPasswordRequirements(true)}
+                        required
+                        disabled={loading}
+                        autoComplete="new-password"
+                        className="pr-10"
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                        onClick={() => setShowPassword(!showPassword)}
+                        disabled={loading}
+                        aria-label={showPassword ? "Hide password" : "Show password"}
+                      >
+                        {showPassword ? (
+                          <EyeOff className="h-4 w-4 text-gray-500" />
+                        ) : (
+                          <Eye className="h-4 w-4 text-gray-500" />
+                        )}
+                      </Button>
+                    </div>
+                    
+                    {/* Password strength indicator */}
+                    {password.length > 0 && (
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-slate-600">Password strength:</span>
+                          <span className={`font-medium ${getPasswordStrengthColor(passwordStrength.score)}`}>
+                            {getPasswordStrengthText(passwordStrength.score)}
+                          </span>
+                        </div>
+                        <div className="w-full bg-gray-200 rounded-full h-2">
+                          <div
+                            className={`h-2 rounded-full transition-all duration-300 ${
+                              passwordStrength.score < 40 ? "bg-red-500" :
+                              passwordStrength.score < 70 ? "bg-yellow-500" : "bg-green-500"
+                            }`}
+                            style={{ width: `${passwordStrength.score}%` }}
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Password requirements */}
+                    {showPasswordRequirements && password.length > 0 && (
+                      <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                        <div className="flex items-start gap-2">
+                          <Shield className="h-4 w-4 text-blue-600 mt-0.5" />
+                          <div className="flex-1">
+                            <h4 className="text-sm font-semibold text-blue-900 mb-2">Password Requirements</h4>
+                            <ul className="space-y-1">
+                              {passwordRequirements.map((req, index) => (
+                                <li 
+                                  key={index}
+                                  className={`text-xs flex items-center gap-2 ${
+                                    req.met ? 'text-green-700' : 'text-blue-700'
+                                  }`}
+                                >
+                                  <div className={`w-1.5 h-1.5 rounded-full ${
+                                    req.met ? 'bg-green-500' : 'bg-blue-400'
+                                  }`} />
+                                  {req.label}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
-                  <Button type="submit" className="w-full" disabled={loading}>
+                  <Button 
+                    type="submit" 
+                    className="w-full" 
+                    disabled={loading || !passwordStrength.isValid}
+                  >
                     {loading ? "Creating account..." : "Sign Up"}
                   </Button>
                 </form>
               </TabsContent>
             </Tabs>
 
-            {/* Forgot Password Form */}
+            {/* Enhanced Forgot Password Form */}
             {showForgotPassword && (
               <div className="mt-6 p-4 bg-gray-50 border border-gray-200 rounded-lg">
-                <h4 className="text-sm font-semibold text-gray-900 mb-3">Reset Password</h4>
+                <div className="flex items-center gap-2 mb-3">
+                  <Shield className="h-4 w-4 text-gray-600" />
+                  <h4 className="text-sm font-semibold text-gray-900">Reset Password</h4>
+                </div>
                 <form onSubmit={handleForgotPassword} className="space-y-3">
                   <div className="space-y-2">
                     <Label htmlFor="forgot-email">Email</Label>
@@ -517,6 +711,12 @@ export default function LoginPage(): JSX.Element {
                       autoComplete="email"
                     />
                   </div>
+                  <Alert>
+                    <Shield className="h-4 w-4" />
+                    <AlertDescription className="text-xs">
+                      You will receive an email with a secure link to reset your password. This link will require you to set a new password before accessing your account.
+                    </AlertDescription>
+                  </Alert>
                   <div className="flex gap-2">
                     <Button type="submit" size="sm" disabled={loading} className="flex-1">
                       {loading ? "Sending..." : "Send Reset Email"}
@@ -623,7 +823,7 @@ export default function LoginPage(): JSX.Element {
               </Alert>
             )}
 
-            {/* Debug Information */}
+            {/* Enhanced Debug Information */}
             {showDebug && (
               <div className="mt-4 p-4 bg-gray-100 rounded-lg text-xs font-mono overflow-auto max-h-96">
                 <h4 className="font-bold mb-2">Debug Information:</h4>
@@ -640,6 +840,8 @@ export default function LoginPage(): JSX.Element {
                           hasAccess: debugInfo.hasAccess,
                           userHasAccess: userHasAccess,
                           userNeedsVerification: userNeedsVerification,
+                          passwordStrength: passwordStrength.score,
+                          passwordValid: passwordStrength.isValid,
                         },
                         null,
                         2,
@@ -668,6 +870,18 @@ export default function LoginPage(): JSX.Element {
                     <div>
                       <p className="font-semibold">Google Sign In:</p>
                       <pre>{JSON.stringify(debugInfo.googleSignInAttempt, null, 2)}</pre>
+                    </div>
+                  )}
+                  {debugInfo.passwordResetAttempt && (
+                    <div>
+                      <p className="font-semibold">Password Reset:</p>
+                      <pre>{JSON.stringify(debugInfo.passwordResetAttempt, null, 2)}</pre>
+                    </div>
+                  )}
+                  {debugInfo.sessionError && (
+                    <div>
+                      <p className="font-semibold">Session Errors:</p>
+                      <pre className="text-red-600">{debugInfo.sessionError}</pre>
                     </div>
                   )}
                 </div>
