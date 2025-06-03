@@ -46,6 +46,8 @@ export function ChatbotWidget({ userId, userEmail }: ChatbotWidgetProps) {
           console.log("Chatbot script loaded successfully")
         }}
       />
+      {/* Required div wrapper for the chatbot */}
+      <div id="chat_form" className="fixed bottom-4 right-4 z-50"></div>
       {/* Hidden div with user info that could be used by the chatbot if needed */}
       <div id="chatbot-user-data" data-user-id={userId} data-user-email={userEmail || ""} style={{ display: "none" }} />
     </>

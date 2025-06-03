@@ -210,7 +210,7 @@ export default function ClientLayout({ children }: ClientLayoutProps): JSX.Eleme
       router.push("/")
       return
     }
-  }, [user, authInitialized, loading, isPublicPage, pathname, router, allowPublicAccess, router])
+  }, [user, authInitialized, loading, isPublicPage, pathname, router, allowPublicAccess])
 
   // Auth state change listener - skip if bypass is active
   useEffect(() => {
@@ -409,6 +409,8 @@ export default function ClientLayout({ children }: ClientLayoutProps): JSX.Eleme
               <div className="text-sm text-slate-400">© 2025 BigNERD Solutions x Carter Hales Design Lab</div>
             </div>
           </div>
+          {/* Place chatbot widget in footer so it appears in bottom right */}
+          {userHasAccess && user && <ChatbotWidget userId={user.id} userEmail={user.email} />}
         </footer>
         {/* Chatbot is intentionally not included in public layout */}
       </>
@@ -633,8 +635,9 @@ export default function ClientLayout({ children }: ClientLayoutProps): JSX.Eleme
             <div className="text-sm text-slate-400">© 2025 BigNERD Solutions x Carter Hales Design Lab</div>
           </div>
         </div>
+        {/* Place chatbot widget in footer so it appears in bottom right */}
+        {userHasAccess && user && <ChatbotWidget userId={user.id} userEmail={user.email} />}
       </footer>
-      {userHasAccess && user && <ChatbotWidget userId={user.id} userEmail={user.email} />}
     </>
   )
 }
