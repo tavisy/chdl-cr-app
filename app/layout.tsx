@@ -1,22 +1,23 @@
 import type React from "react"
-import "./globals.css"
+import type { Metadata } from "next"
 import { Inter } from "next/font/google"
-import { ThemeProvider } from "@/components/theme-provider"
-import ClientLayout from "./ClientLayout"
-import { ClarityProvider } from "@/components/ClarityProvider"
-import FathomAnalytics from "@/components/FathomAnalytics"
-import { Suspense } from "react"
+import Script from "next/script"
+import "./globals.css"
+import ClientRootLayout from "./ClientRootLayout"
 
 const inter = Inter({ subsets: ["latin"] })
 
-export const metadata = {
-  title: "Crown Royal Strategic Report",
+export const metadata: Metadata = {
+  title: "Crown Royal Strategic Report | BigNERD Solutions x Carter Hales Design Lab",
   description: "Charting a Course for Premiumization and Bourbon Enthusiast Engagement",
-  generator: "v0.dev",
-}
-
-function AnalyticsErrorBoundary({ children }: { children: React.ReactNode }) {
-  return <Suspense fallback={null}>{children}</Suspense>
+  keywords: "Crown Royal, strategic report, bourbon, whiskey, premiumization, brand strategy",
+  authors: [{ name: "BigNERD Solutions x Carter Hales Design Lab" }],
+  openGraph: {
+    title: "Crown Royal Strategic Report",
+    description: "Charting a Course for Premiumization and Bourbon Enthusiast Engagement",
+    type: "website",
+  },
+    generator: 'v0.dev'
 }
 
 export default function RootLayout({
@@ -27,13 +28,17 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={inter.className}>
-        <ThemeProvider attribute="class" defaultTheme="light" enableSystem>
-          <ClarityProvider />
-          <AnalyticsErrorBoundary>
-            <FathomAnalytics />
-          </AnalyticsErrorBoundary>
-          <ClientLayout>{children}</ClientLayout>
-        </ThemeProvider>
+        <ClientRootLayout>{children}</ClientRootLayout>
+
+        {/* Required div for chatbot */}
+        <div id="chat_form"></div>
+
+        {/* Chatbot script - loaded directly in layout as recommended */}
+        <Script
+          src="https://chatapp.bignerdsolutions.com/js/chat_plugin.js"
+          data-bot-id="51415"
+          strategy="lazyOnload"
+        />
       </body>
     </html>
   )

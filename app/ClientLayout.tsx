@@ -11,9 +11,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Mail, AlertCircle, LogOut, UserIcon } from "lucide-react"
 import { resendConfirmation, hasVerifiedAccess, getCurrentUser } from "@/lib/auth"
 import { shouldAllowPublicAccess } from "@/lib/auth-bypass"
-
-// Import the ChatbotWidget component at the top of the file
-import { ChatbotWidget } from "@/components/ChatbotWidget"
+import { ChatbotController } from "@/components/ChatbotController"
 
 interface ClientLayoutProps {
   children: React.ReactNode
@@ -409,10 +407,9 @@ export default function ClientLayout({ children }: ClientLayoutProps): JSX.Eleme
               <div className="text-sm text-slate-400">© 2025 BigNERD Solutions x Carter Hales Design Lab</div>
             </div>
           </div>
-          {/* Place chatbot widget in footer so it appears in bottom right */}
-          {userHasAccess && user && <ChatbotWidget userId={user.id} userEmail={user.email} />}
         </footer>
-        {/* Chatbot is intentionally not included in public layout */}
+        {/* Chatbot controller for public access mode */}
+        <ChatbotController isAuthenticated={false} />
       </>
     )
   }
@@ -439,7 +436,12 @@ export default function ClientLayout({ children }: ClientLayoutProps): JSX.Eleme
   // Render public pages without layout
   if (isPublicPage) {
     console.log("ClientLayout: Rendering public page without layout")
-    return <>{children}</>
+    return (
+      <>
+        {children}
+        <ChatbotController isAuthenticated={false} />
+      </>
+    )
   }
 
   // Prevent flash of protected content for unauthenticated users
@@ -519,6 +521,7 @@ export default function ClientLayout({ children }: ClientLayoutProps): JSX.Eleme
             )}
           </CardContent>
         </Card>
+        <ChatbotController isAuthenticated={false} />
       </div>
     )
   }
@@ -635,9 +638,10 @@ export default function ClientLayout({ children }: ClientLayoutProps): JSX.Eleme
             <div className="text-sm text-slate-400">© 2025 BigNERD Solutions x Carter Hales Design Lab</div>
           </div>
         </div>
-        {/* Place chatbot widget in footer so it appears in bottom right */}
-        {userHasAccess && user && <ChatbotWidget userId={user.id} userEmail={user.email} />}
       </footer>
+
+      {/* Chatbot controller for authenticated users */}
+      <ChatbotController isAuthenticated={userHasAccess} userId={user.id} />
     </>
   )
 }
