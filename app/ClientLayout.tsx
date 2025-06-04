@@ -9,10 +9,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Mail, AlertCircle, LogOut, UserIcon } from "lucide-react"
-import { resendConfirmation, hasVerifiedAccess, getCurrentUser, isAdmin } from "@/lib/auth"
+import { resendConfirmation, hasVerifiedAccess, getCurrentUser } from "@/lib/auth"
 import { shouldAllowPublicAccess } from "@/lib/auth-bypass"
 import { ChatbotController } from "@/components/ChatbotController"
-import ChatbotToggle from "@/components/ChatbotToggle"
 
 interface ClientLayoutProps {
   children: React.ReactNode
@@ -113,12 +112,6 @@ export default function ClientLayout({ children }: ClientLayoutProps): JSX.Eleme
     }
 
     return hasAccess
-  }, [user])
-
-  // Check if user is admin
-  const userIsAdmin = useMemo(() => {
-    if (!user) return false
-    return isAdmin(user)
   }, [user])
 
   // Add a small delay before showing loading spinner to prevent flashing
@@ -257,7 +250,7 @@ export default function ClientLayout({ children }: ClientLayoutProps): JSX.Eleme
       console.log("ClientLayout: Cleaning up auth state listener")
       subscription.unsubscribe()
     }
-  }, [authInitialized, user, allowPublicAccess])
+  }, [authInitialized, user?.id, allowPublicAccess])
 
   // Mobile menu click outside handler
   useEffect(() => {
@@ -415,8 +408,6 @@ export default function ClientLayout({ children }: ClientLayoutProps): JSX.Eleme
             </div>
           </div>
         </footer>
-        {/* Chatbot toggle button */}
-        <ChatbotToggle isAdmin={false} />
         {/* Chatbot controller for public access mode */}
         <ChatbotController isAuthenticated={false} />
       </>
@@ -530,7 +521,6 @@ export default function ClientLayout({ children }: ClientLayoutProps): JSX.Eleme
             )}
           </CardContent>
         </Card>
-        <ChatbotToggle isAdmin={false} />
         <ChatbotController isAuthenticated={false} />
       </div>
     )
@@ -650,11 +640,8 @@ export default function ClientLayout({ children }: ClientLayoutProps): JSX.Eleme
         </div>
       </footer>
 
-      {/* Chatbot toggle button */}
-      <ChatbotToggle isAdmin={userIsAdmin} />
-
       {/* Chatbot controller for authenticated users */}
-      <ChatbotController isAuthenticated={userHasAccess} userId={user.id} user={user} />
+      <ChatbotController isAuthenticated={userHasAccess} userId={user.id} />
     </>
   )
 }

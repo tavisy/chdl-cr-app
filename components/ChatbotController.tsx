@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect } from "react"
 import { usePathname } from "next/navigation"
 import Chatbot from "./Chatbot"
 
@@ -11,7 +11,6 @@ interface ChatbotControllerProps {
 
 export function ChatbotController({ isAuthenticated, userId }: ChatbotControllerProps) {
   const pathname = usePathname()
-  const [isChatbotEnabled, setIsChatbotEnabled] = useState<boolean>(true)
 
   // List of paths where the chatbot should not appear
   const excludedPaths = ["/login", "/auth/callback", "/auth/verify", "/auth/reset-password", "/admin"]
@@ -27,28 +26,8 @@ export function ChatbotController({ isAuthenticated, userId }: ChatbotController
     }
   }, [])
 
-  // Listen for chatbot toggle events and check localStorage on mount
-  useEffect(() => {
-    const handleChatbotToggled = (event: CustomEvent) => {
-      setIsChatbotEnabled(event.detail.enabled)
-    }
-
-    // Check localStorage on mount
-    const storedValue = localStorage.getItem("chatbotEnabled")
-    if (storedValue !== null) {
-      setIsChatbotEnabled(storedValue === "true")
-    }
-
-    // Add event listener for toggle events
-    window.addEventListener("chatbotToggled", handleChatbotToggled as EventListener)
-
-    return () => {
-      window.removeEventListener("chatbotToggled", handleChatbotToggled as EventListener)
-    }
-  }, [])
-
-  // Only render our new chatbot if authenticated, not on excluded paths, and enabled
-  if (!isAuthenticated || isExcludedPath || !isChatbotEnabled) {
+  // Only render our new chatbot if authenticated and not on excluded paths
+  if (!isAuthenticated || isExcludedPath) {
     return null
   }
 
