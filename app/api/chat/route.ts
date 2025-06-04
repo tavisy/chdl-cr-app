@@ -45,32 +45,41 @@ export async function POST(req: Request) {
       .map((item) => `[${item.section}]\n${item.content}`)
       .join("\n\n")
 
+    // Get the section names for source attribution
+    const sourceSections = relevantContent.slice(0, 3).map((item) => item.section)
+
     // Create enhanced system prompt with microsite content priority
     const systemPrompt = `You are an AI assistant specialized in Crown Royal's strategic positioning and bourbon market analysis. You have access to comprehensive research about Crown Royal's market position, consumer insights, competitive landscape, and strategic recommendations.
 
-IMPORTANT: You must prioritize information from the Crown Royal microsite when answering questions. The microsite contains the most accurate and up-to-date information about Crown Royal's strategy.
+CRITICAL INSTRUCTION: You MUST include source citations in your responses using this exact format: [Source: Section Name]
+
+When referencing information from the microsite, you MUST cite the source using these exact section names:
+- [Source: Executive Summary]
+- [Source: Canadian Identity] 
+- [Source: Consumer Insights]
+- [Source: Competitive Analysis]
+- [Source: Market Disruption]
+- [Source: Strategic Recommendations]
+- [Source: References]
 
 Relevant microsite content for this query:
 ${contextSections}
 
-Complete knowledge base sections available:
-- Executive Summary: Overview of Crown Royal's strategic challenges and opportunities
-- Canadian Identity: How Crown Royal's Canadian heritage provides strategic advantages
-- Consumer Insights: Detailed analysis of bourbon enthusiast demographics and behaviors
-- Competitive Analysis: Assessment of the premium bourbon landscape and Crown Royal's position
-- Market Disruption: Opportunities for digital marketing, experiential programs, and product innovation
-- Strategic Recommendations: Seven key strategic imperatives for Crown Royal's growth
-- References: Research sources and methodological notes
+Available sources for this response: ${sourceSections.join(", ")}
 
 Instructions:
 1. ALWAYS prioritize information from the Crown Royal microsite content provided above
-2. Provide detailed, strategic insights based on the microsite research
-3. Reference specific data points and recommendations from the research
-4. Be conversational but professional
-5. If asked about topics outside Crown Royal/whisky strategy, politely redirect to relevant strategic topics
-6. When citing information, mention which section of the microsite it comes from
+2. MUST include [Source: Section Name] citations when referencing specific information
+3. Provide detailed, strategic insights based on the microsite research
+4. Reference specific data points and recommendations from the research
+5. Be conversational but professional
+6. If asked about topics outside Crown Royal/whisky strategy, politely redirect to relevant strategic topics
+7. End your response with a summary of sources used
 
-Remember: You're helping stakeholders understand Crown Royal's strategic opportunities and market positioning based on the official microsite content.`
+Example response format:
+"According to our research [Source: Consumer Insights], bourbon enthusiasts value authenticity and craftsmanship. The strategic analysis shows [Source: Strategic Recommendations] that Crown Royal should leverage its Canadian heritage..."
+
+Remember: You're helping stakeholders understand Crown Royal's strategic opportunities and market positioning based on the official microsite content. ALWAYS include source citations.`
 
     const result = await streamText({
       model: openai("gpt-4o-mini"), // Using mini model for better reliability

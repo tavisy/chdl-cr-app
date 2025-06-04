@@ -6,7 +6,7 @@ import { useState, useRef, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { MessageCircle, X, Send, Loader2, AlertCircle, BookOpen } from "lucide-react"
+import { MessageCircle, X, Send, Loader2, AlertCircle, BookOpen, ExternalLink } from "lucide-react"
 import { useChat } from "ai/react"
 import { getCurrentUser } from "@/lib/auth"
 import type { User } from "@supabase/supabase-js"
@@ -93,26 +93,44 @@ export default function Chatbot() {
     handleSubmit(e)
   }
 
-  // Helper function to extract source references from AI responses
+  // Enhanced function to extract source references from AI responses
   const extractSourceReferences = (text: string) => {
-    const sourceRegex = /\[(.*?)\]/g
+    // Look for [Source: Section Name] pattern
+    const sourceRegex = /\[Source:\s*([^\]]+)\]/gi
     const matches = [...text.matchAll(sourceRegex)]
-    const sources = matches
-      .map((match) => match[1])
-      .filter((source) =>
-        [
-          "Executive Summary",
-          "Canadian Identity",
-          "Consumer Insights",
-          "Competitive Analysis",
-          "Market Disruption",
-          "Strategic Recommendations",
-          "References",
-        ].includes(source),
-      )
+    const sources = matches.map((match) => match[1].trim())
 
-    // Return unique sources
-    return [...new Set(sources)]
+    // Also look for standalone section references in brackets
+    const sectionRegex =
+      /\[(Executive Summary|Canadian Identity|Consumer Insights|Competitive Analysis|Market Disruption|Strategic Recommendations|References)\]/gi
+    const sectionMatches = [...text.matchAll(sectionRegex)]
+    const sectionSources = sectionMatches.map((match) => match[1])
+
+    // Combine and deduplicate
+    const allSources = [...sources, ...sectionSources]
+    return [...new Set(allSources)]
+  }
+
+  // Function to clean text by removing source citations for display
+  const cleanMessageText = (text: string) => {
+    return text
+      .replace(/\[Source:\s*[^\]]+\]/gi, "") // Remove [Source: ...] citations
+      .replace(/\s+/g, " ") // Clean up extra whitespace
+      .trim()
+  }
+
+  // Function to get page route for source
+  const getSourceRoute = (source: string) => {
+    const routeMap: { [key: string]: string } = {
+      "Executive Summary": "/",
+      "Canadian Identity": "/canadian-identity",
+      "Consumer Insights": "/consumer-insights",
+      "Competitive Analysis": "/competitive-analysis",
+      "Market Disruption": "/market-disruption",
+      "Strategic Recommendations": "/recommendations",
+      References: "/references",
+    }
+    return routeMap[source] || "/"
   }
 
   return (
@@ -171,13 +189,18 @@ export default function Chatbot() {
                   <p className="text-sm">
                     Ask me anything about Crown Royal's strategic positioning, market analysis, or recommendations!
                   </p>
-                  <p className="text-xs mt-2">I can help with insights from our comprehensive research.</p>
+                  <p className="text-xs mt-2">
+                    I can help with insights from our comprehensive research and will show you exactly where the
+                    information comes from.
+                  </p>
                 </div>
               )}
 
               {messages.map((message) => {
                 // Extract sources for assistant messages
                 const sources = message.role === "assistant" ? extractSourceReferences(message.content) : []
+                const cleanedContent =
+                  message.role === "assistant" ? cleanMessageText(message.content) : message.content
 
                 return (
                   <div key={message.id} className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}>
@@ -186,20 +209,29 @@ export default function Chatbot() {
                         message.role === "user" ? "bg-purple-600 text-white" : "bg-gray-100 text-gray-900"
                       }`}
                     >
-                      {message.content}
+                      {cleanedContent}
 
                       {/* Display sources for assistant messages */}
                       {message.role === "assistant" && sources.length > 0 && (
-                        <div className="mt-2 pt-2 border-t border-gray-200">
-                          <p className="text-xs font-semibold flex items-center text-gray-600">
+                        <div className="mt-3 pt-2 border-t border-gray-300">
+                          <p className="text-xs font-semibold flex items-center text-gray-600 mb-2">
                             <BookOpen className="h-3 w-3 mr-1" />
-                            Sources:
+                            Sources from Crown Royal microsite:
                           </p>
-                          <div className="flex flex-wrap gap-1 mt-1">
+                          <div className="flex flex-wrap gap-1">
                             {sources.map((source, idx) => (
-                              <span key={idx} className="text-xs bg-purple-100 text-purple-800 px-1.5 py-0.5 rounded">
+                              <button
+                                key={idx}
+                                onClick={() => {
+                                  const route = getSourceRoute(source)
+                                  window.open(route, "_blank")
+                                }}
+                                className="text-xs bg-purple-100 hover:bg-purple-200 text-purple-800 px-2 py-1 rounded-full flex items-center gap-1 transition-colors cursor-pointer"
+                                title={`View ${source} page`}
+                              >
                                 {source}
-                              </span>
+                                <ExternalLink className="h-2 w-2" />
+                              </button>
                             ))}
                           </div>
                         </div>
@@ -214,7 +246,7 @@ export default function Chatbot() {
                   <div className="bg-gray-100 rounded-lg px-3 py-2">
                     <div className="flex items-center space-x-2">
                       <Loader2 className="h-4 w-4 animate-spin" />
-                      <span className="text-sm text-gray-600">Thinking...</span>
+                      <span className="text-sm text-gray-600">Analyzing microsite content...</span>
                     </div>
                   </div>
                 </div>
