@@ -6,7 +6,6 @@ import { useState, useRef, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { ScrollArea } from "@/components/ui/scroll-area"
 import { MessageCircle, X, Send, Loader2, AlertCircle, BookOpen } from "lucide-react"
 import { useChat } from "ai/react"
 import { getCurrentUser } from "@/lib/auth"
@@ -18,6 +17,7 @@ export default function Chatbot() {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const messagesContainerRef = useRef<HTMLDivElement>(null)
 
   const {
     messages,
@@ -56,6 +56,23 @@ export default function Chatbot() {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
   }, [messages])
+
+  // Prevent body scroll when chatbot is open and user is scrolling within it
+  useEffect(() => {
+    if (isOpen) {
+      const handleWheel = (e: WheelEvent) => {
+        const target = e.target as Element
+        const chatWidget = document.querySelector("[data-chat-widget]")
+
+        if (chatWidget && chatWidget.contains(target)) {
+          e.stopPropagation()
+        }
+      }
+
+      document.addEventListener("wheel", handleWheel, { passive: false })
+      return () => document.removeEventListener("wheel", handleWheel)
+    }
+  }, [isOpen])
 
   if (isLoading) {
     return null
@@ -113,7 +130,10 @@ export default function Chatbot() {
 
       {/* Chat Window */}
       {isOpen && (
-        <Card className="fixed bottom-6 right-6 w-96 shadow-2xl z-50 max-h-[80vh] min-h-[400px] flex flex-col">
+        <Card
+          className="fixed bottom-6 right-6 w-96 shadow-2xl z-[9999] max-h-[80vh] min-h-[400px] flex flex-col"
+          data-chat-widget
+        >
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 bg-purple-600 text-white rounded-t-lg flex-shrink-0">
             <CardTitle className="text-lg font-semibold">Crown Royal Assistant</CardTitle>
             <Button variant="ghost" size="icon" onClick={toggleChat} className="h-8 w-8 text-white hover:bg-purple-700">
@@ -132,74 +152,75 @@ export default function Chatbot() {
               </div>
             )}
 
-            {/* Messages Area - This should scroll and take remaining space */}
-            <div className="flex-1 overflow-hidden">
-              <ScrollArea className="h-full">
-                <div className="p-4 space-y-4">
-                  {messages.length === 0 && (
-                    <div className="text-center text-gray-500 py-8">
-                      <MessageCircle className="h-12 w-12 mx-auto mb-4 text-gray-300" />
-                      <p className="text-sm">
-                        Ask me anything about Crown Royal's strategic positioning, market analysis, or recommendations!
-                      </p>
-                      <p className="text-xs mt-2">I can help with insights from our comprehensive research.</p>
-                    </div>
-                  )}
-
-                  {messages.map((message) => {
-                    // Extract sources for assistant messages
-                    const sources = message.role === "assistant" ? extractSourceReferences(message.content) : []
-
-                    return (
-                      <div
-                        key={message.id}
-                        className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}
-                      >
-                        <div
-                          className={`max-w-[80%] rounded-lg px-3 py-2 text-sm whitespace-pre-wrap break-words ${
-                            message.role === "user" ? "bg-purple-600 text-white" : "bg-gray-100 text-gray-900"
-                          }`}
-                        >
-                          {message.content}
-
-                          {/* Display sources for assistant messages */}
-                          {message.role === "assistant" && sources.length > 0 && (
-                            <div className="mt-2 pt-2 border-t border-gray-200">
-                              <p className="text-xs font-semibold flex items-center text-gray-600">
-                                <BookOpen className="h-3 w-3 mr-1" />
-                                Sources:
-                              </p>
-                              <div className="flex flex-wrap gap-1 mt-1">
-                                {sources.map((source, idx) => (
-                                  <span
-                                    key={idx}
-                                    className="text-xs bg-purple-100 text-purple-800 px-1.5 py-0.5 rounded"
-                                  >
-                                    {source}
-                                  </span>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    )
-                  })}
-
-                  {isChatLoading && (
-                    <div className="flex justify-start">
-                      <div className="bg-gray-100 rounded-lg px-3 py-2">
-                        <div className="flex items-center space-x-2">
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                          <span className="text-sm text-gray-600">Thinking...</span>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  <div ref={messagesEndRef} />
+            {/* Messages Area - Custom scrollable container */}
+            <div
+              ref={messagesContainerRef}
+              className="flex-1 overflow-y-auto overflow-x-hidden p-4 space-y-4"
+              style={{
+                scrollbarWidth: "thin",
+                scrollbarColor: "#9333ea #f3f4f6",
+              }}
+              onWheel={(e) => {
+                // Allow scrolling within the messages container
+                e.stopPropagation()
+              }}
+            >
+              {messages.length === 0 && (
+                <div className="text-center text-gray-500 py-8">
+                  <MessageCircle className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+                  <p className="text-sm">
+                    Ask me anything about Crown Royal's strategic positioning, market analysis, or recommendations!
+                  </p>
+                  <p className="text-xs mt-2">I can help with insights from our comprehensive research.</p>
                 </div>
-              </ScrollArea>
+              )}
+
+              {messages.map((message) => {
+                // Extract sources for assistant messages
+                const sources = message.role === "assistant" ? extractSourceReferences(message.content) : []
+
+                return (
+                  <div key={message.id} className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}>
+                    <div
+                      className={`max-w-[80%] rounded-lg px-3 py-2 text-sm whitespace-pre-wrap break-words ${
+                        message.role === "user" ? "bg-purple-600 text-white" : "bg-gray-100 text-gray-900"
+                      }`}
+                    >
+                      {message.content}
+
+                      {/* Display sources for assistant messages */}
+                      {message.role === "assistant" && sources.length > 0 && (
+                        <div className="mt-2 pt-2 border-t border-gray-200">
+                          <p className="text-xs font-semibold flex items-center text-gray-600">
+                            <BookOpen className="h-3 w-3 mr-1" />
+                            Sources:
+                          </p>
+                          <div className="flex flex-wrap gap-1 mt-1">
+                            {sources.map((source, idx) => (
+                              <span key={idx} className="text-xs bg-purple-100 text-purple-800 px-1.5 py-0.5 rounded">
+                                {source}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
+
+              {isChatLoading && (
+                <div className="flex justify-start">
+                  <div className="bg-gray-100 rounded-lg px-3 py-2">
+                    <div className="flex items-center space-x-2">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <span className="text-sm text-gray-600">Thinking...</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <div ref={messagesEndRef} />
             </div>
 
             {/* Input Area - Fixed at bottom */}
@@ -245,6 +266,24 @@ export default function Chatbot() {
           </CardContent>
         </Card>
       )}
+
+      {/* Custom scrollbar styles */}
+      <style jsx>{`
+        .chat-scrollbar::-webkit-scrollbar {
+          width: 6px;
+        }
+        .chat-scrollbar::-webkit-scrollbar-track {
+          background: #f3f4f6;
+          border-radius: 3px;
+        }
+        .chat-scrollbar::-webkit-scrollbar-thumb {
+          background: #9333ea;
+          border-radius: 3px;
+        }
+        .chat-scrollbar::-webkit-scrollbar-thumb:hover {
+          background: #7c3aed;
+        }
+      `}</style>
     </>
   )
 }
