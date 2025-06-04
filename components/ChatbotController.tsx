@@ -2,6 +2,7 @@
 
 import { useEffect } from "react"
 import { usePathname } from "next/navigation"
+import Chatbot from "./Chatbot"
 
 interface ChatbotControllerProps {
   isAuthenticated: boolean
@@ -17,22 +18,18 @@ export function ChatbotController({ isAuthenticated, userId }: ChatbotController
   // Check if current path is excluded
   const isExcludedPath = excludedPaths.some((path) => pathname === path || pathname.startsWith(path + "/"))
 
+  // Hide the old chatbot div since we're using our new React component
   useEffect(() => {
     const chatForm = document.getElementById("chat_form")
-
     if (chatForm) {
-      // Show/hide chatbot based on authentication and path
-      if (isAuthenticated && !isExcludedPath) {
-        chatForm.style.display = "block"
-        chatForm.style.position = "fixed"
-        chatForm.style.bottom = "20px"
-        chatForm.style.right = "20px"
-        chatForm.style.zIndex = "1000"
-      } else {
-        chatForm.style.display = "none"
-      }
+      chatForm.style.display = "none"
     }
-  }, [isAuthenticated, isExcludedPath, pathname])
+  }, [])
 
-  return null // This component doesn't render anything visible
+  // Only render our new chatbot if authenticated and not on excluded paths
+  if (!isAuthenticated || isExcludedPath) {
+    return null
+  }
+
+  return <Chatbot />
 }
