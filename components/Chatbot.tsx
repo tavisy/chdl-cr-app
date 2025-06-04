@@ -11,6 +11,7 @@ import { useChat } from "ai/react"
 import { getCurrentUser } from "@/lib/auth"
 import type { User } from "@supabase/supabase-js"
 import Image from "next/image"
+import { useRouter } from "next/navigation"
 
 export default function Chatbot() {
   const [isOpen, setIsOpen] = useState(false)
@@ -19,6 +20,8 @@ export default function Chatbot() {
   const [error, setError] = useState<string | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const messagesContainerRef = useRef<HTMLDivElement>(null)
+
+  const router = useRouter()
 
   const {
     messages,
@@ -266,10 +269,10 @@ export default function Chatbot() {
                                   key={idx}
                                   onClick={() => {
                                     const route = getSourceRoute(source)
-                                    window.open(route, "_blank")
+                                    router.push(route)
                                   }}
                                   className="text-xs bg-purple-100 hover:bg-purple-200 text-purple-800 px-2 py-1 rounded-full flex items-center gap-1 transition-colors cursor-pointer"
-                                  title={`View ${source} page`}
+                                  title={`Go to ${source} page`}
                                 >
                                   {source}
                                   <ExternalLink className="h-2 w-2" />
