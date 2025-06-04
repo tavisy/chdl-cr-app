@@ -12,22 +12,176 @@ export interface KnowledgeSection {
 
 export const CROWN_ROYAL_KNOWLEDGE_BASE: KnowledgeSection[] = [
   {
+    id: "marketData",
+    title: "Market Data & Statistics",
+    route: "/",
+    content: `
+CROWN ROYAL MARKET POSITION & PERFORMANCE
+
+Crown Royal Key Metrics:
+- 42% share of Canadian whisky market (market leadership position)
+- 79% brand loyalty score (highest among Canadian whiskies)
+- 78% brand value growth to CAD 3.2 billion in 2025
+- Market leadership in Canadian whisky category
+
+GLOBAL WHISKEY MARKET OVERVIEW
+
+Market Growth Projections:
+- Global whiskey market projected to grow at 6.7% CAGR from 2025 to 2034
+- Market expansion forecasted to reach $345.7 billion by 2035
+- Spirits maintained market share lead over beer and wine for third consecutive year in 2024
+- Spirits reached 42.2% of total beverage alcohol revenue in 2024
+
+AMERICAN WHISKEY MARKET PERFORMANCE 2024
+
+Revenue & Volume:
+- Total Revenue: $11.5 billion
+- Volume Growth: -2.7% (first decline in over 20 years)
+- American whiskey sales decline - -1.3% in 2024
+- Super-Premium Growth: +6% (continuing premiumization trend)
+
+Market Disruption Factors:
+- Record 14.3 million barrels aging in Kentucky (supply paradox)
+- EU's pending 50% tariffs on American spirits effective March 2025
+- Trade barriers threatening international expansion
+- Overproduction concerns despite premium scarcity
+
+CANADIAN WHISKY MARKET PERFORMANCE 2024
+
+US Market Performance:
+- US Revenue: $951.9 million
+- Value Growth: +0.9%
+- Tariff Status: Free (competitive advantage over American whiskey)
+- Positioned to benefit from bourbon supply constraints
+
+CONSUMER SEGMENT INSIGHTS
+
+Millennials & Gen Z:
+- Account for over 45% of total bourbon consumption
+- Significant drivers of premium whisky demand
+- Strong preference for craft and premium spirits
+- Key growth demographic for whisky category
+
+Premiumization Trends:
+- Super-premium-and-above tiers rising approximately 6% in 2024
+- Standard tiers facing declines
+- Consumers willing to pay premium for quality and authenticity
+- Craft distillery proliferation creating discovery culture
+
+Consumer Behavior Patterns:
+- Increasing popularity of whiskey cocktails
+- Growth in experiential consumption (distillery visits, tastings)
+- Shift towards e-commerce and digital engagement
+- Value experiences as "affordable luxury"
+- Seeking unique small-batch expressions
+- Emphasis on local ingredients and traditional methods
+
+COMPETITIVE LANDSCAPE
+
+Market Dynamics:
+- Bourbon shortage creating opportunity for alternatives
+- Limited editions commanding significant price premiums
+- Japanese whisky success demonstrating path for non-American whisky
+- Digital community building becoming essential
+- Craft enthusiasts driving authenticity and innovation demands
+
+Crown Royal Competitive Position:
+- Strong brand recognition but underperceived as premium by enthusiasts
+- Limited presence in bourbon enthusiast conversation
+- Unique Canadian heritage currently underleveraged
+- Strong base for building premium tier extensions
+- Opportunity in super-premium Canadian whisky category
+`,
+    keywords: ["market data", "statistics", "42% market share", "79% brand loyalty", "CAD 3.2 billion", "brand value", "6.7% CAGR", "$345.7 billion", "42.2% spirits revenue", "$11.5 billion", "american whiskey revenue", "$951.9 million", "canadian whisky revenue", "-2.7% volume growth", "-1.3% sales decline", "+6% super-premium growth", "14.3 million barrels", "50% EU tariffs", "45% millennials gen z", "bourbon consumption", "premiumization", "market leadership", "competitive advantage", "tariff-free", "supply constraints"],
+    priority: 9,
+    lastUpdated: "2025-01-03"
+  },
+  {
     id: "executiveSummary",
     title: "Executive Summary",
     route: "/",
     content: `
-Crown Royal faces a critical juncture: to evolve from a historically strong but potentially outdated, Canadian whisky brand into a compelling alternative for the discerning bourbon enthusiast.
+Crown Royal faces a critical juncture: to evolve from a historically strong, yet potentially outdated, Canadian whisky brand into a compelling alternative for the discerning bourbon enthusiast.
 
-PRIMARY CHALLENGE: Crown Royal must capitalize on the bourbon shortage by repositioning Canadian rye whisky from a secondary to premium North American whisky category leader.
+STRATEGIC IMPERATIVE
 
-KEY OPPORTUNITIES:
-- Leverage Canadian heritage and craftsmanship as authentic differentiators
-- Target bourbon enthusiasts seeking premium alternatives
-- Develop limited edition and super-premium offerings
-- Create experiential marketing and education programs
-- Build digital-first engagement strategies
+Primary Challenge:
+Crown Royal must capitalize on the bourbon shortage by authentically repositioning Canadian rye whisky from a secondary choice to the premium North American whisky category leader.
+
+Market Disruption: Bourbon shortages create unprecedented opportunity window
+Perception Gap: Canadian whisky viewed as secondary despite superior quality
+Leadership Potential: Authentic repositioning can capture premium market share
+
+Market Challenge:
+The North American whiskey market is dynamic, characterized by a nuanced premiumization trend, the disruptive rise of craft distilleries, and a significant shift towards e-commerce and experiential consumption.
+
+While bourbon continues its robust growth, Canadian whisky, despite its market leadership in its category, contends with persistent stereotypes and a perception of being primarily a mixer.
+
+Strategic Opportunity:
+The core challenge lies in authentically leveraging Crown Royal's rich Canadian identity – its unique production methods, pristine geographical advantages, and legacy of craftsmanship – to resonate with a bourbon-centric palate.
+
+The strategic imperative is to reframe Crown Royal's narrative, enhance its visual identity, and innovate its product offerings to highlight its inherent quality and complexity.
+
+KEY CROWN ROYAL STATISTICS:
+- 42% Crown Royal's share of Canadian whisky market
+- 79% Brand loyalty score - highest among Canadian whiskies
+- 78% Brand value growth to CAD 3.2 billion in 2025
+
+MARKET LANDSCAPE ANALYSIS
+
+Current State & Trends:
+
+Overall Growth:
+The global whiskey market is projected to grow at a CAGR of 6.7% from 2025 to 2034, with some forecasts suggesting even more aggressive expansion to $345.7 billion by 2035.
+
+Spirits Leadership:
+Spirits maintained market share lead over beer and wine for the third consecutive year in 2024, reaching 42.2% of total beverage alcohol revenue.
+
+Premiumization Trend:
+Super-premium-and-above American whiskey tiers continued to rise by approximately 6% in 2024, while standard tiers faced declines.
+
+American Whiskey Performance 2024:
+- Revenue: $11.5B
+- Volume Growth: -2.7%
+- Super-Premium Growth: +6%
+
+Canadian Whisky Performance 2024:
+- US Revenue: $951.9M
+- Value Growth: +0.9%
+- Tariff Status: Free
+
+BOURBON INDUSTRY DISRUPTION:
+
+Sales Decline:
+American whiskey sales declined for the first time in over 20 years, with 2024 showing 1.3% decline.
+
+Trade Barriers:
+EU's pending 50% tariffs on American spirits in March 2025 threaten international expansion.
+
+Supply Paradox:
+Record 14.3 million barrels aging in Kentucky create overproduction concerns despite premium scarcity.
+
+KEY CONSUMER SEGMENTS:
+
+Millennials & Gen Z:
+Significant drivers of demand for high-quality whiskies, showing strong preference for premium and craft spirits. Account for over 45% of total Bourbon consumption.
+
+Premiumization Seekers:
+Willing to spend more on high-quality, handcrafted whiskies. Appreciate nuanced flavors and craftsmanship, seeking high-end bottles with compelling stories.
+
+Craft Enthusiasts:
+Driven by desire for authenticity and innovation. Seek unique small-batch expressions with emphasis on local ingredients and traditional methods.
+
+Cocktail Culture:
+Increasing popularity of whiskey cocktails elevates presence in bars and restaurants. Bourbon-based cocktails have seen substantial growth.
+
+Experiential Consumers:
+Interested in visiting distilleries, participating in tastings, and learning about whiskey-making process. View experiences as "affordable luxury."
+
+Value-Conscious:
+Prioritize price-to-value while remaining quality-focused. Seek accessible whiskies positioned as "everyday indulgences" with quality delivery.
 `,
-    keywords: ["crown royal", "executive summary", "strategic challenge", "bourbon shortage", "canadian whisky", "premiumization", "heritage", "bourbon enthusiasts", "limited edition", "digital marketing"],
+    keywords: ["crown royal", "executive summary", "strategic challenge", "bourbon shortage", "canadian whisky", "premiumization", "heritage", "bourbon enthusiasts", "limited edition", "digital marketing", "42% market share", "79% brand loyalty", "CAD 3.2 billion", "brand value growth", "market disruption", "1.3% decline", "american whiskey", "$11.5B revenue", "$951.9M canadian revenue", "6.7% CAGR", "$345.7 billion", "42.2% spirits market share", "super-premium growth", "millennials", "gen z", "45% bourbon consumption", "craft enthusiasts", "experiential consumers", "14.3 million barrels", "50% EU tariffs", "kentucky", "trade barriers"],
     priority: 10,
     lastUpdated: "2025-01-03"
   },
