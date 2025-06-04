@@ -140,7 +140,14 @@ export default function Chatbot() {
       {!isOpen && (
         <Button
           onClick={toggleChat}
-          className="fixed bottom-6 right-6 h-16 w-16 rounded-full bg-purple-600 hover:bg-purple-700 shadow-lg z-50 p-1 overflow-hidden border-2 border-white"
+          className="fixed bottom-6 right-6 h-16 w-16 rounded-full shadow-lg z-50 p-1 overflow-hidden border-2 border-white"
+          style={{ backgroundColor: "#065F46" }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.backgroundColor = "#047857"
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.backgroundColor = "#065F46"
+          }}
           size="icon"
         >
           <div className="relative w-full h-full rounded-full overflow-hidden">
@@ -161,7 +168,10 @@ export default function Chatbot() {
           className="fixed bottom-6 right-6 w-96 shadow-2xl z-[9999] max-h-[80vh] min-h-[400px] flex flex-col"
           data-chat-widget
         >
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 bg-purple-600 text-white rounded-t-lg flex-shrink-0">
+          <CardHeader
+            className="flex flex-row items-center justify-between space-y-0 pb-2 text-white rounded-t-lg flex-shrink-0"
+            style={{ backgroundColor: "#065F46" }}
+          >
             <div className="flex items-center space-x-2">
               <div className="relative w-8 h-8 rounded-full overflow-hidden border border-white/20">
                 <Image
@@ -174,7 +184,7 @@ export default function Chatbot() {
               </div>
               <CardTitle className="text-lg font-semibold">KongZilla AI</CardTitle>
             </div>
-            <Button variant="ghost" size="icon" onClick={toggleChat} className="h-8 w-8 text-white hover:bg-purple-700">
+            <Button variant="ghost" size="icon" onClick={toggleChat} className="h-8 w-8 text-white hover:bg-white/20">
               <X className="h-4 w-4" />
             </Button>
           </CardHeader>
@@ -196,7 +206,7 @@ export default function Chatbot() {
               className="flex-1 overflow-y-auto overflow-x-hidden p-4 space-y-4"
               style={{
                 scrollbarWidth: "thin",
-                scrollbarColor: "#9333ea #f3f4f6",
+                scrollbarColor: "#065F46 #f3f4f6",
               }}
               onWheel={(e) => {
                 // Allow scrolling within the messages container
@@ -248,8 +258,9 @@ export default function Chatbot() {
 
                       <div
                         className={`rounded-lg px-3 py-2 text-sm whitespace-pre-wrap break-words ${
-                          message.role === "user" ? "bg-purple-600 text-white" : "bg-gray-100 text-gray-900"
+                          message.role === "user" ? "text-white" : "bg-gray-100 text-gray-900"
                         }`}
+                        style={message.role === "user" ? { backgroundColor: "#065F46" } : {}}
                       >
                         {cleanedContent}
 
@@ -268,7 +279,16 @@ export default function Chatbot() {
                                     const route = getSourceRoute(source)
                                     window.open(route, "_blank")
                                   }}
-                                  className="text-xs bg-purple-100 hover:bg-purple-200 text-purple-800 px-2 py-1 rounded-full flex items-center gap-1 transition-colors cursor-pointer"
+                                  className="text-xs text-white px-2 py-1 rounded-full flex items-center gap-1 transition-colors cursor-pointer"
+                                  style={{
+                                    backgroundColor: "#065F46",
+                                  }}
+                                  onMouseEnter={(e) => {
+                                    e.currentTarget.style.backgroundColor = "#047857"
+                                  }}
+                                  onMouseLeave={(e) => {
+                                    e.currentTarget.style.backgroundColor = "#065F46"
+                                  }}
                                   title={`View ${source} page`}
                                 >
                                   {source}
@@ -342,7 +362,14 @@ export default function Chatbot() {
                   type="submit"
                   size="icon"
                   disabled={isChatLoading || !input.trim()}
-                  className="bg-purple-600 hover:bg-purple-700 mb-0"
+                  className="mb-0 text-white"
+                  style={{ backgroundColor: "#065F46" }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.backgroundColor = "#047857"
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.backgroundColor = "#065F46"
+                  }}
                 >
                   <Send className="h-4 w-4" />
                 </Button>
@@ -363,11 +390,11 @@ export default function Chatbot() {
           border-radius: 3px;
         }
         .chat-scrollbar::-webkit-scrollbar-thumb {
-          background: #9333ea;
+          background: #065F46;
           border-radius: 3px;
         }
         .chat-scrollbar::-webkit-scrollbar-thumb:hover {
-          background: #7c3aed;
+          background: #047857;
         }
       `}</style>
     </>
