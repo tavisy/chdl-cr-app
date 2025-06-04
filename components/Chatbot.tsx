@@ -3,13 +3,14 @@
 import type React from "react"
 
 import { useState, useRef, useEffect } from "react"
+import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { X, Send, Loader2, AlertCircle, BookOpen, ExternalLink } from "lucide-react"
 import { useChat } from "ai/react"
 import { getCurrentUser } from "@/lib/auth"
 import type { User } from "@supabase/supabase-js"
 import Image from "next/image"
-import { useRouter } from "next/navigation"
 
 export default function Chatbot() {
   const [isOpen, setIsOpen] = useState(false)
@@ -18,8 +19,6 @@ export default function Chatbot() {
   const [error, setError] = useState<string | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const messagesContainerRef = useRef<HTMLDivElement>(null)
-
-  const router = useRouter()
 
   const {
     messages,
@@ -139,8 +138,19 @@ export default function Chatbot() {
     <>
       {/* Chat Toggle Button with Custom Avatar */}
       {!isOpen && (
-        <button onClick={toggleChat} className="chatbot-toggle">
-          <div className="chatbot-avatar-container">
+        <Button
+          onClick={toggleChat}
+          className="fixed bottom-6 right-6 h-16 w-16 rounded-full shadow-lg z-50 p-1 overflow-hidden border-2 border-white"
+          style={{ backgroundColor: "#065F46" }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.backgroundColor = "#047857"
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.backgroundColor = "#065F46"
+          }}
+          size="icon"
+        >
+          <div className="relative w-full h-full rounded-full overflow-hidden">
             <Image
               src="/images/kongzilla-chat-avatar.png"
               alt="KongZilla AI"
@@ -149,15 +159,21 @@ export default function Chatbot() {
               sizes="64px"
             />
           </div>
-        </button>
+        </Button>
       )}
 
       {/* Chat Window */}
       {isOpen && (
-        <div className="chatbot-window" data-chat-widget>
-          <div className="chatbot-header">
-            <div className="chatbot-header-title">
-              <div className="chatbot-header-avatar">
+        <Card
+          className="fixed bottom-6 right-6 w-96 shadow-2xl z-[9999] max-h-[80vh] min-h-[400px] flex flex-col"
+          data-chat-widget
+        >
+          <CardHeader
+            className="flex flex-row items-center justify-between space-y-0 pb-2 text-white rounded-t-lg flex-shrink-0"
+            style={{ backgroundColor: "#065F46" }}
+          >
+            <div className="flex items-center space-x-2">
+              <div className="relative w-8 h-8 rounded-full overflow-hidden border border-white/20">
                 <Image
                   src="/images/kongzilla-chat-avatar.png"
                   alt="KongZilla AI"
@@ -166,20 +182,20 @@ export default function Chatbot() {
                   sizes="32px"
                 />
               </div>
-              <h2 className="text-lg font-semibold">KongZilla AI</h2>
+              <CardTitle className="text-lg font-semibold">KongZilla AI</CardTitle>
             </div>
-            <button onClick={toggleChat} className="chatbot-close-button">
+            <Button variant="ghost" size="icon" onClick={toggleChat} className="h-8 w-8 text-white hover:bg-white/20">
               <X className="h-4 w-4" />
-            </button>
-          </div>
+            </Button>
+          </CardHeader>
 
-          <div className="flex flex-col p-0 flex-1 overflow-hidden">
+          <CardContent className="flex flex-col p-0 flex-1 overflow-hidden">
             {/* Error Display */}
             {error && (
-              <div className="chatbot-error">
-                <div className="chatbot-error-content">
-                  <AlertCircle className="chatbot-error-icon" />
-                  <p className="chatbot-error-text">{error}</p>
+              <div className="bg-red-50 border-l-4 border-red-400 p-3 m-4 flex-shrink-0">
+                <div className="flex items-center">
+                  <AlertCircle className="h-4 w-4 text-red-400 mr-2" />
+                  <p className="text-sm text-red-700">{error}</p>
                 </div>
               </div>
             )}
@@ -187,20 +203,24 @@ export default function Chatbot() {
             {/* Messages Area - Custom scrollable container */}
             <div
               ref={messagesContainerRef}
-              className="chatbot-messages-container chatbot-scrollbar"
+              className="flex-1 overflow-y-auto overflow-x-hidden p-4 space-y-4"
+              style={{
+                scrollbarWidth: "thin",
+                scrollbarColor: "#065F46 #f3f4f6",
+              }}
               onWheel={(e) => {
                 // Allow scrolling within the messages container
                 e.stopPropagation()
               }}
             >
               {messages.length === 0 && (
-                <div className="chatbot-welcome">
-                  <div className="chatbot-welcome-avatar">
+                <div className="text-center text-gray-500 py-8">
+                  <div className="relative w-16 h-16 mx-auto mb-4 rounded-full overflow-hidden">
                     <Image
                       src="/images/kongzilla-chat-avatar.png"
                       alt="Crown Royal Assistant"
                       fill
-                      className="object-cover"
+                      className="object-cover opacity-50"
                       sizes="64px"
                     />
                   </div>
@@ -221,14 +241,11 @@ export default function Chatbot() {
                   message.role === "assistant" ? cleanMessageText(message.content) : message.content
 
                 return (
-                  <div
-                    key={message.id}
-                    className={message.role === "user" ? "chatbot-user-message" : "chatbot-assistant-message"}
-                  >
-                    <div className="chatbot-message-content">
+                  <div key={message.id} className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}>
+                    <div className="flex items-start space-x-2 max-w-[80%]">
                       {/* Assistant Avatar */}
                       {message.role === "assistant" && (
-                        <div className="chatbot-message-avatar">
+                        <div className="relative w-6 h-6 rounded-full overflow-hidden flex-shrink-0 mt-1">
                           <Image
                             src="/images/kongzilla-chat-avatar.png"
                             alt="Assistant"
@@ -240,29 +257,39 @@ export default function Chatbot() {
                       )}
 
                       <div
-                        className={`chatbot-message-bubble ${
-                          message.role === "user" ? "chatbot-user-bubble" : "chatbot-assistant-bubble"
+                        className={`rounded-lg px-3 py-2 text-sm whitespace-pre-wrap break-words ${
+                          message.role === "user" ? "text-white" : "bg-gray-100 text-gray-900"
                         }`}
+                        style={message.role === "user" ? { backgroundColor: "#065F46" } : {}}
                       >
                         {cleanedContent}
 
                         {/* Display sources for assistant messages */}
                         {message.role === "assistant" && sources.length > 0 && (
-                          <div className="chatbot-sources">
-                            <p className="chatbot-sources-title">
+                          <div className="mt-3 pt-2 border-t border-gray-300">
+                            <p className="text-xs font-semibold flex items-center text-gray-600 mb-2">
                               <BookOpen className="h-3 w-3 mr-1" />
                               Sources from Crown Royal microsite:
                             </p>
-                            <div className="chatbot-sources-list">
+                            <div className="flex flex-wrap gap-1">
                               {sources.map((source, idx) => (
                                 <button
                                   key={idx}
                                   onClick={() => {
                                     const route = getSourceRoute(source)
-                                    router.push(route)
+                                    window.open(route, "_blank")
                                   }}
-                                  className="chatbot-source-button"
-                                  title={`Go to ${source} page`}
+                                  className="text-xs text-white px-2 py-1 rounded-full flex items-center gap-1 transition-colors cursor-pointer"
+                                  style={{
+                                    backgroundColor: "#065F46",
+                                  }}
+                                  onMouseEnter={(e) => {
+                                    e.currentTarget.style.backgroundColor = "#047857"
+                                  }}
+                                  onMouseLeave={(e) => {
+                                    e.currentTarget.style.backgroundColor = "#065F46"
+                                  }}
+                                  title={`View ${source} page`}
                                 >
                                   {source}
                                   <ExternalLink className="h-2 w-2" />
@@ -278,9 +305,9 @@ export default function Chatbot() {
               })}
 
               {isChatLoading && (
-                <div className="chatbot-loading">
+                <div className="flex justify-start">
                   <div className="flex items-start space-x-2">
-                    <div className="chatbot-message-avatar">
+                    <div className="relative w-6 h-6 rounded-full overflow-hidden flex-shrink-0 mt-1">
                       <Image
                         src="/images/kongzilla-chat-avatar.png"
                         alt="Assistant"
@@ -289,9 +316,11 @@ export default function Chatbot() {
                         sizes="24px"
                       />
                     </div>
-                    <div className="chatbot-loading-content">
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      <span className="chatbot-loading-text">Analyzing microsite content...</span>
+                    <div className="bg-gray-100 rounded-lg px-3 py-2">
+                      <div className="flex items-center space-x-2">
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        <span className="text-sm text-gray-600">Analyzing microsite content...</span>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -301,9 +330,9 @@ export default function Chatbot() {
             </div>
 
             {/* Input Area - Fixed at bottom */}
-            <div className="chatbot-input-area">
-              <form onSubmit={handleFormSubmit} className="chatbot-form">
-                <div className="chatbot-textarea-container">
+            <div className="border-t p-4 flex-shrink-0 bg-white rounded-b-lg">
+              <form onSubmit={handleFormSubmit} className="flex items-end space-x-2">
+                <div className="flex-1">
                   <Textarea
                     value={input}
                     onChange={handleInputChange}
@@ -329,15 +358,45 @@ export default function Chatbot() {
                     }}
                   />
                 </div>
-                <button type="submit" disabled={isChatLoading || !input.trim()} className="chatbot-send-button">
+                <Button
+                  type="submit"
+                  size="icon"
+                  disabled={isChatLoading || !input.trim()}
+                  className="mb-0 text-white"
+                  style={{ backgroundColor: "#065F46" }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.backgroundColor = "#047857"
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.backgroundColor = "#065F46"
+                  }}
+                >
                   <Send className="h-4 w-4" />
-                </button>
+                </Button>
               </form>
-              <p className="chatbot-hint">Press Enter to send, Shift+Enter for new line</p>
+              <p className="text-xs text-gray-500 mt-1">Press Enter to send, Shift+Enter for new line</p>
             </div>
-          </div>
-        </div>
+          </CardContent>
+        </Card>
       )}
+
+      {/* Custom scrollbar styles */}
+      <style jsx>{`
+        .chat-scrollbar::-webkit-scrollbar {
+          width: 6px;
+        }
+        .chat-scrollbar::-webkit-scrollbar-track {
+          background: #f3f4f6;
+          border-radius: 3px;
+        }
+        .chat-scrollbar::-webkit-scrollbar-thumb {
+          background: #065F46;
+          border-radius: 3px;
+        }
+        .chat-scrollbar::-webkit-scrollbar-thumb:hover {
+          background: #047857;
+        }
+      `}</style>
     </>
   )
 }

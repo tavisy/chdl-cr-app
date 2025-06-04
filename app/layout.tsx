@@ -1,6 +1,7 @@
 import type React from "react"
 import type { Metadata } from "next"
 import { Inter } from "next/font/google"
+import Script from "next/script"
 import "./globals.css"
 import ClientRootLayout from "./ClientRootLayout"
 
@@ -16,7 +17,7 @@ export const metadata: Metadata = {
     description: "Charting a Course for Premiumization and Bourbon Enthusiast Engagement",
     type: "website",
   },
-  generator: "v0.dev",
+    generator: 'v0.dev'
 }
 
 export default function RootLayout({
@@ -28,6 +29,16 @@ export default function RootLayout({
     <html lang="en">
       <body className={inter.className}>
         <ClientRootLayout>{children}</ClientRootLayout>
+
+        {/* Required div for chatbot */}
+        <div id="chat_form"></div>
+
+        {/* Chatbot script - loaded directly in layout as recommended */}
+        <Script
+          src="https://chatapp.bignerdsolutions.com/js/chat_plugin.js"
+          data-bot-id="51415"
+          strategy="lazyOnload"
+        />
       </body>
     </html>
   )
