@@ -4,7 +4,7 @@ import type React from "react"
 
 import { useState, useRef, useEffect } from "react"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { MessageCircle, X, Send, Loader2, AlertCircle } from "lucide-react"
@@ -149,7 +149,7 @@ export default function Chatbot() {
                       </div>
                     </div>
                   )}
-                  
+
                   <div ref={messagesEndRef} />
                 </div>
               </ScrollArea>
@@ -157,23 +157,43 @@ export default function Chatbot() {
 
             {/* Input Area - Fixed at bottom */}
             <div className="border-t p-4 flex-shrink-0 bg-white rounded-b-lg">
-              <form onSubmit={handleFormSubmit} className="flex space-x-2">
-                <Input
-                  value={input}
-                  onChange={handleInputChange}
-                  placeholder="Ask about Crown Royal strategy..."
-                  className="flex-1"
-                  disabled={isChatLoading}
-                />
+              <form onSubmit={handleFormSubmit} className="flex items-end space-x-2">
+                <div className="flex-1">
+                  <Textarea
+                    value={input}
+                    onChange={handleInputChange}
+                    placeholder="Ask about Crown Royal strategy..."
+                    className="min-h-[40px] max-h-[120px] resize-none"
+                    disabled={isChatLoading}
+                    rows={1}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !e.shiftKey) {
+                        e.preventDefault()
+                        handleFormSubmit(e)
+                      }
+                    }}
+                    style={{
+                      height: "auto",
+                      minHeight: "40px",
+                      maxHeight: "120px",
+                    }}
+                    onInput={(e) => {
+                      const target = e.target as HTMLTextAreaElement
+                      target.style.height = "auto"
+                      target.style.height = Math.min(target.scrollHeight, 120) + "px"
+                    }}
+                  />
+                </div>
                 <Button
                   type="submit"
                   size="icon"
                   disabled={isChatLoading || !input.trim()}
-                  className="bg-purple-600 hover:bg-purple-700"
+                  className="bg-purple-600 hover:bg-purple-700 mb-0"
                 >
                   <Send className="h-4 w-4" />
                 </Button>
               </form>
+              <p className="text-xs text-gray-500 mt-1">Press Enter to send, Shift+Enter for new line</p>
             </div>
           </CardContent>
         </Card>
