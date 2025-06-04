@@ -1,8 +1,21 @@
-// Comprehensive knowledge base containing content from all microsite pages
+// Complete Crown Royal Knowledge Base - Updated with full recommendations page content
 
-export const CROWN_ROYAL_KNOWLEDGE_BASE = {
-  // Executive Summary
-  executiveSummary: `
+export interface KnowledgeSection {
+  id: string
+  title: string
+  route: string
+  content: string
+  keywords: string[]
+  priority: number
+  lastUpdated: string
+}
+
+export const CROWN_ROYAL_KNOWLEDGE_BASE: KnowledgeSection[] = [
+  {
+    id: "executiveSummary",
+    title: "Executive Summary",
+    route: "/",
+    content: `
 Crown Royal faces a critical juncture: to evolve from a historically strong but potentially outdated, Canadian whisky brand into a compelling alternative for the discerning bourbon enthusiast.
 
 PRIMARY CHALLENGE: Crown Royal must capitalize on the bourbon shortage by repositioning Canadian rye whisky from a secondary to premium North American whisky category leader.
@@ -14,9 +27,15 @@ KEY OPPORTUNITIES:
 - Create experiential marketing and education programs
 - Build digital-first engagement strategies
 `,
-
-  // Canadian Identity Page
-  canadianIdentity: `
+    keywords: ["crown royal", "executive summary", "strategic challenge", "bourbon shortage", "canadian whisky", "premiumization", "heritage", "bourbon enthusiasts", "limited edition", "digital marketing"],
+    priority: 10,
+    lastUpdated: "2025-01-03"
+  },
+  {
+    id: "canadianIdentity",
+    title: "Canadian Identity",
+    route: "/canadian-identity",
+    content: `
 CANADIAN IDENTITY INSIGHTS
 
 Crown Royal's Canadian Heritage as Strategic Advantage
@@ -46,9 +65,15 @@ Heritage Storytelling Opportunities:
 Strategic Recommendation:
 Crown Royal should embrace and amplify its Canadian identity as a primary differentiator, positioning Canadian whisky as a premium alternative with authentic heritage rather than attempting to compete directly with bourbon on bourbon's terms.
 `,
-
-  // Consumer Insights Page
-  consumerInsights: `
+    keywords: ["canadian identity", "heritage", "1939", "royal warrant", "king george vi", "queen elizabeth", "gimli distillery", "craftsmanship", "authenticity", "differentiation", "multi-grain", "cold climate aging", "maple charcoal", "premium spirits", "storytelling"],
+    priority: 9,
+    lastUpdated: "2025-01-03"
+  },
+  {
+    id: "consumerInsights",
+    title: "Consumer Insights",
+    route: "/consumer-insights",
+    content: `
 CONSUMER INSIGHTS
 
 Bourbon Enthusiast Profile
@@ -96,9 +121,15 @@ Opportunity Areas:
 - Digital community building
 - Education and connoisseurship development
 `,
-
-  // Competitive Analysis Page
-  competitiveAnalysis: `
+    keywords: ["consumer insights", "bourbon enthusiast", "demographics", "psychographics", "purchase behavior", "authenticity", "craftsmanship", "collector", "limited editions", "digital engagement", "social media", "whisky communities", "experiential marketing", "premium gifting", "education"],
+    priority: 9,
+    lastUpdated: "2025-01-03"
+  },
+  {
+    id: "competitiveAnalysis",
+    title: "Competitive Analysis",
+    route: "/competitive-analysis",
+    content: `
 COMPETITIVE ANALYSIS
 
 Premium Bourbon Landscape
@@ -158,9 +189,15 @@ Strategic Imperatives:
 4. Build digital community around Canadian whisky appreciation
 5. Invest in experiential marketing to drive connoisseur credibility
 `,
-
-  // Market Disruption Page
-  marketDisruption: `
+    keywords: ["competitive analysis", "buffalo trace", "makers mark", "woodford reserve", "bourbon shortage", "premiumization", "scarcity marketing", "collector culture", "super-premium", "brand recognition", "mainstream", "connoisseur", "heritage storytelling", "craft distillery", "japanese whisky"],
+    priority: 9,
+    lastUpdated: "2025-01-03"
+  },
+  {
+    id: "marketDisruption",
+    title: "Market Disruption",
+    route: "/market-disruption",
+    content: `
 MARKET DISRUPTION OPPORTUNITIES
 
 Digital-First Marketing Approach
@@ -225,67 +262,198 @@ Distribution and Retail Innovation:
 - Travel retail exclusive expressions
 - Opportunity: Premium retail presence drives 35% higher conversion
 `,
-
-  // Recommendations Page
-  recommendations: `
+    keywords: ["market disruption", "digital marketing", "e-commerce", "direct-to-consumer", "social commerce", "influencer collaboration", "virtual experiences", "augmented reality", "experiential marketing", "collector community", "super-premium", "limited edition", "master series", "single barrel", "retail innovation"],
+    priority: 8,
+    lastUpdated: "2025-01-03"
+  },
+  {
+    id: "recommendations",
+    title: "Strategic Recommendations",
+    route: "/recommendations",
+    content: `
 STRATEGIC RECOMMENDATIONS
 
-Seven Key Strategic Imperatives for Crown Royal
+Comprehensive recommendations for Crown Royal's visual identity refresh, branding strategy, and market positioning
 
-1. Canadian Heritage Amplification
-   - Reposition Canadian whisky as premium North American alternative
-   - Develop storytelling around royal warrant and Canadian craftsmanship
-   - Highlight Gimli Distillery's unique northern climate aging advantages
-   - Create content series on Canadian whisky production differences
-   - Success Metric: Increase "premium perception" score by 25 points
+Three Strategic Imperatives for Market Leadership
 
-2. Super-Premium Product Development
-   - Launch Crown Royal Reserve Collection ($60-80)
-   - Develop Crown Royal Master Series ($100-150)
-   - Create Crown Royal Single Barrel Program
-   - Introduce innovative finishing techniques unique to Canadian whisky
-   - Success Metric: Grow revenue share from $50+ products from 8% to 25%
+1. AUTHENTICITY FROM THE NORTH
+Reclaim "Royal": Emphasize Excellence, Not Just History
+Position the "royal" narrative as a legacy of Canadian excellence, attention to detail, and craftsmanship, fit for discerning palates, rather than outdated pomp.
 
-3. Bourbon Enthusiast Engagement Program
-   - Develop Crown Royal Connoisseur Club with tiered membership
-   - Create educational content on Canadian whisky production
-   - Host virtual and in-person masterclasses with master blenders
-   - Implement whisky ambassador program targeting influencers
-   - Success Metric: Increase bourbon enthusiast consideration by 40%
+Blending is Mastery: Showcase the Art, Not the Compromise
+Elevate the meticulous blending of 50 distinct whiskies as a sophisticated Canadian art form, highlighting master blenders' expertise and intricate craftsmanship.
 
-4. Experiential Marketing Activation
-   - Launch Crown Royal Whisky Academy with certification
-   - Develop immersive distillery tour experience in Gimli
-   - Create pop-up Canadian whisky experiences in key markets
-   - Implement sensory-focused tasting laboratories
-   - Success Metric: Drive 100,000 premium experience participants annually
+Be Transparent: Debunk Myths, Build Trust
+Directly address misconceptions about Canadian whisky by transparently communicating natural ingredients and the authentic blending process.
 
-5. Digital Community Building
-   - Develop Crown Royal Collector community platform
-   - Create content series on Canadian whisky appreciation
-   - Implement social commerce functionality for limited releases
-   - Build first-party data strategy for personalized marketing
-   - Success Metric: Build 250,000 member digital community in 18 months
+2. CANADIAN TERROIR & CRAFTSMANSHIP
+Let the Climate Shape the Spirit: Highlight Unique Aging
+Emphasize dynamic aging in Gimli, Manitoba, where extreme seasonal temperature swings accelerate flavor development with characteristics that cannot be replicated elsewhere.
 
-6. Influencer Partnership Strategy
-   - Identify and partner with whisky category influencers
-   - Create collaborative limited edition releases
-   - Develop ambassador program for authentic advocacy
-   - Implement content co-creation strategy
-   - Success Metric: Generate 50M+ organic impressions through influencer content
+Water Matters: Connect to Pristine Canadian Sources
+Promote the purity and unique mineral profile of water from Lake Winnipeg, naturally filtered through limestone as foundational to Crown Royal's signature smoothness.
 
-7. Limited Edition Collector Series
-   - Launch annual numbered collector releases
-   - Develop quarterly limited editions with unique finishes
-   - Create Crown Royal Heritage Series highlighting Canadian history
-   - Implement digital authentication and collector tracking
-   - Success Metric: Sell out 100% of limited editions within 30 days of release
+Innovate with Purpose: Canadian Grains, Unique Finishes
+Highlight resilient Canadian grains and experiment with small-batch releases featuring unique grain profiles or innovative cask finishes like Canadian ice wine barrels.
 
-Implementation Roadmap:
-- Phase 1 (0-6 months): Strategy development and foundation building
-- Phase 2 (6-12 months): Super-premium product launches and digital platform development
-- Phase 3 (12-24 months): Experiential marketing rollout and influencer program activation
-- Phase 4 (24-36 months): Full ecosystem integration and international expansion
+3. THE SOPHISTICATED ALTERNATIVE
+Engage Bourbon Drinkers: Educate and Convert
+Target bourbon enthusiasts through strategic positioning, sampling programs emphasizing aligned flavor characteristics, and digital campaigns highlighting familiar taste profiles.
+
+Capitalize on Disruption: Be the Reliable, Premium Choice
+Position Crown Royal as the stable, tariff-proof choice, contrasting bourbon's supply volatility and price inflation with consistent access and superior value.
+
+Elevate the Look: Packaging that Reflects Premium Quality
+Implement visual identity refresh with substantial bottles, refined labels, sophisticated typography, and premium closures to signal quality without Canadian clichés.
+
+Strategic Impact Metrics:
+- 85% of bourbon drinkers open to alternatives during shortages
+- 40% premium spirits growth driven by authenticity and craftsmanship
+- 65% of consumers willing to pay premium for transparent production
+- 3x market share growth potential through strategic positioning
+
+The Strategic Imperative:
+Crown Royal must pivot from outdated perceptions to become a compelling, premium Canadian whisky that resonates with evolving bourbon enthusiasts through authentic heritage, unique production advantages, and sophisticated craftsmanship.
+
+VISUAL IDENTITY & PACKAGING REFRESH
+
+Bottle Shape:
+Evolve to more substantial and commanding design, akin to premium bourbon bottles, but with distinctly Canadian elegance. Consider heavier glass, pronounced shoulder or thicker base, wider base for stability and taller, elegant neck.
+
+Label Design:
+Move away from busy, gold-heavy design towards refined, minimalist aesthetic. Modern serif font for brand name, clean sans-serif for secondary info. Deep forest greens, charcoal grays, icy blues, warm copper accents.
+
+Logo Redesign:
+Reinterpret crown element to be more modern and sophisticated. Simplified, stylized crown with cleaner lines, more abstract geometric form, integrated into shield or minimalist emblem.
+
+Closure:
+Upgrade from screw cap to premium, weighty cork or high-quality synthetic stopper. Substantial feel, possibly topped with metal or wood cap integrating new logo for enhanced unboxing experience.
+
+BRAND MESSAGING & TAGLINES
+
+"Crown Royal: The Canadian Art of Whiskey"
+Elevates Canadian whisky as an art form, emphasizing craftsmanship
+
+"Crown Royal: Forged in the North. Refined by Hand"
+Highlights unique climate influence and human craftsmanship, appealing to rugged authenticity
+
+"Crown Royal: Discover the Depths of Canadian Character"
+Invites exploration, promises complexity, and links to nuanced Canadian identity
+
+"Crown Royal: A Legacy of Smooth. A Future of Flavor"
+Acknowledges current positive perception while promising evolving complexity
+
+PRODUCT INNOVATION RECOMMENDATIONS
+
+Higher Proof Expressions - Innovation Priority
+Description: Introduce more readily available cask-strength or higher-proof (90-100 proof) versions beyond Hand Selected Barrel
+Expected Impact: Directly addresses key preference of bourbon enthusiasts and signals commitment to robust flavor
+
+New Age Statements - Innovation Priority
+Description: Launch limited editions with longer age statements (15-year, 20-year) to showcase depth and complexity
+Expected Impact: Appeals to collectors and premiumization seekers, demonstrates Canadian aging capabilities
+
+Unique Mash Bills/Grain Focus - Innovation Priority
+Description: Experiment with small-batch releases highlighting specific Canadian grain profiles (100% Canadian rye, unique wheat whisky)
+Expected Impact: Offers distinct flavor profiles that differentiate from traditional bourbons
+
+Innovative Cask Finishes - Innovation Priority
+Description: Explore limited editions finished in different barrel types (Canadian ice wine casks, maple syrup barrels, unique Canadian wood)
+Expected Impact: Adds complexity and novelty following bourbon trends while emphasizing Canadian terroir
+
+MARKETING & COMMUNICATION CHANNELS
+
+Digital Marketing:
+- Rich video content: "Meet the Master Blender" series, "Journey of the Grain" documentaries
+- Influencer partnerships with whiskey critics and bourbon enthusiasts
+- Enhanced e-commerce platform with exclusive online releases
+
+Experiential Events:
+- "Taste of the North" pop-ups in key urban centers
+- Gimli distillery experiences and whiskey tourism
+- High-end bar partnerships for featured cocktail programs
+
+Traditional Advertising:
+- Premium lifestyle magazines and whiskey-specific publications
+- Strategic billboards in urban areas with target consumers
+- Out-of-home featuring new visual identity and compelling taglines
+
+LEVERAGING ASPIRATIONAL CANADIAN IDENTITY
+
+Beyond traditional Canadian clichés lies a rich tapestry of authentic, aspirational themes that can powerfully position Crown Royal as a modern, premium brand that resonates with evolving consumer values.
+
+Authentic Canadian Themes:
+- Rugged Natural Beauty: Vast wilderness and extreme climate conditions that enhance whisky aging
+- Innovation & Pioneering Spirit: Two centuries of Canadian whisky innovation and resourcefulness
+- Understated Sophistication: Quality without pretension, excellence through quiet confidence
+- Meticulous Craftsmanship: Lifetime of experience in blending 50 distinct whiskies
+
+Modern Canadian Values:
+- Inclusivity & Diversity: Tolerance for multiculturalism and progressive social values
+- Welcoming Community: Creating spaces where everyone belongs and is valued
+- Authentic Representation: Genuine commitment to diverse voices and perspectives
+- Progressive Leadership: Forward-thinking approach to social responsibility
+
+Brand Values Integration:
+- Inclusive marketing campaigns featuring diverse consumers
+- Partnerships with organizations promoting diversity and inclusion
+- Support for LGBTQ+ events and multicultural celebrations
+- Authentic storytelling that reflects modern Canadian values
+
+Target Consumer Appeal:
+- Millennials and Gen Z who prioritize brand values alignment
+- Urban professionals seeking authentic, progressive brands
+- Diverse consumer base looking for inclusive representation
+- Bourbon enthusiasts who value craftsmanship and social responsibility
+
+Strategic Impact:
+Modern Positioning: Projects a modern, welcoming image that appeals to a broad consumer base while maintaining authentic Canadian heritage.
+- Differentiates from traditional whiskey brands
+- Builds emotional connection beyond product attributes
+- Attracts socially conscious consumers
+
+Implementation Framework:
+Value-Based Messaging: Integrate inclusivity and diversity themes into brand communications while maintaining focus on craftsmanship and quality.
+- Authentic storytelling that reflects diverse experiences
+- Inclusive visual representation in marketing materials
+- Community-focused event programming
+
+Strategic Partnerships: Collaborate with organizations and influencers who embody modern Canadian values and reach target demographics.
+- Cultural festivals and community celebrations
+- Diversity-focused hospitality and culinary partnerships
+- Social impact initiatives and charitable collaborations
+
+REFRAMING CROWN ROYAL'S HISTORICAL NARRATIVE
+
+The Royal Origin Re-contextualized:
+Crown Royal's inception in 1939, meticulously crafted from 50 select whiskies to commemorate the first grand tour of Canada by King George VI and Queen Elizabeth, is a powerful historical anchor. This narrative positions the brand as a "premium product from day one," originally intended as a symbol of the "hardworking and genuine nature of the Canadian people".
+
+From Outdated Pomp to Canadian Excellence:
+The opportunity lies in re-contextualizing this "royal" narrative not as outdated pomp, but as a legacy of Canadian excellence, attention to detail, and a commitment to quality fit for the most discerning palates. It signifies a "crown jewel" of Canadian craftsmanship, where the "royal" aspect represents a benchmark of quality and a pioneering spirit in Canadian whisky.
+
+IMPLEMENTATION PHASES
+
+Phase 1: Strategic Alignment & Creative Development (0-6 months)
+- Finalize new brand positioning and messaging based on recommended creative territories
+- Initiate comprehensive packaging redesign and logo evolution
+- Develop detailed product innovation roadmap
+- Craft transparent communication strategy to address 'additives' misconception
+- Begin content creation for digital platforms
+
+Phase 2: Product & Market Preparation (6-12 months)
+- Launch initial product innovations under refreshed visual identity
+- Roll out new packaging across key SKUs
+- Develop comprehensive digital marketing campaigns
+- Plan and pilot experiential marketing events
+- Educate trade partners on new brand narrative
+
+Phase 3: Full Market Launch & Sustained Engagement (12+ months)
+- Execute full-scale brand refresh launch across all channels
+- Monitor market reception and consumer sentiment
+- Iterate on marketing campaigns based on data-driven feedback
+- Expand distillery tourism initiatives
+- Sustain efforts to elevate Canadian whisky category perception
 
 Investment Requirements:
 - Product Development: $3.5M
@@ -299,10 +467,18 @@ Expected Returns:
 - Margin Improvement: +320 basis points
 - Brand Value Increase: +25%
 - ROI: 3.2x investment over 5 years
-`,
 
-  // References Page
-  references: `
+The strategic imperative is clear: Crown Royal must pivot from outdated perceptions to become a compelling, premium Canadian whisky that resonates with evolving bourbon enthusiasts through authentic heritage, unique production advantages, and sophisticated craftsmanship.
+`,
+    keywords: ["strategic recommendations", "authenticity from the north", "canadian terroir", "sophisticated alternative", "visual identity", "packaging refresh", "bottle shape", "label design", "logo redesign", "closure", "brand messaging", "taglines", "product innovation", "higher proof", "age statements", "mash bills", "cask finishes", "marketing channels", "digital marketing", "experiential events", "traditional advertising", "canadian identity", "modern canadian values", "inclusivity", "diversity", "historical narrative", "royal origin", "implementation phases", "investment requirements", "roi", "gimli manitoba", "lake winnipeg", "50 distinct whiskies", "master blender", "bourbon drinkers", "premium quality", "tariff-proof", "canadian grains", "ice wine barrels", "taste of the north", "distillery tourism"],
+    priority: 10,
+    lastUpdated: "2025-01-03"
+  },
+  {
+    id: "references",
+    title: "References",
+    route: "/references",
+    content: `
 REFERENCES AND RESEARCH SOURCES
 
 Industry Reports:
@@ -340,85 +516,124 @@ Methodological Notes:
 - Sales data analysis based on 36-month rolling average
 - Forecasting models use 5-year projection with quarterly updates
 `,
-}
+    keywords: ["references", "research sources", "industry reports", "discus", "iwsr", "nielsen", "mintel", "euromonitor", "consumer research", "competitive intelligence", "market trends", "premiumization", "digital community", "experiential marketing", "methodology"],
+    priority: 6,
+    lastUpdated: "2025-01-03"
+  }
+]
 
-// Helper function to search the knowledge base
-export function searchKnowledgeBase(query: string): Array<{ section: string; content: string; relevance: number }> {
+// Enhanced search function with exact text preservation
+export function searchKnowledgeBase(query: string): Array<{ 
+  section: string; 
+  content: string; 
+  relevance: number;
+  priority: number;
+  route?: string;
+}> {
   const queryLower = query.toLowerCase()
-  const queryWords = queryLower.split(/\s+/).filter((word) => word.length > 3)
+  const queryWords = queryLower.split(/\s+/).filter(word => word.length > 2)
 
-  const results: Array<{ section: string; content: string; relevance: number }> = []
+  const results: Array<{ 
+    section: string; 
+    content: string; 
+    relevance: number;
+    priority: number;
+    route?: string;
+  }> = []
 
-  // Search through each section of the knowledge base
-  Object.entries(CROWN_ROYAL_KNOWLEDGE_BASE).forEach(([section, content]) => {
-    const contentLower = content.toLowerCase()
+  CROWN_ROYAL_KNOWLEDGE_BASE.forEach(section => {
+    const contentLower = section.content.toLowerCase()
+    const titleLower = section.title.toLowerCase()
+    const keywordsLower = section.keywords.join(' ').toLowerCase()
+    
     let relevance = 0
 
-    // Check for exact phrase match (highest relevance)
-    if (contentLower.includes(queryLower)) {
-      relevance += 10
+    // Exact phrase match in title (highest relevance)
+    if (titleLower.includes(queryLower)) {
+      relevance += 30
     }
 
-    // Check for individual word matches
-    queryWords.forEach((word) => {
+    // Exact phrase match in keywords (high relevance)
+    if (keywordsLower.includes(queryLower)) {
+      relevance += 25
+    }
+
+    // Exact phrase match in content
+    if (contentLower.includes(queryLower)) {
+      relevance += 20
+    }
+
+    // Section title word matches
+    if (titleLower.includes(queryLower.replace(/\s+/g, ''))) {
+      relevance += 15
+    }
+
+    // Individual word matches
+    queryWords.forEach(word => {
+      // Title word matches (high value)
+      if (titleLower.includes(word)) {
+        relevance += 12
+      }
+      
+      // Keyword matches (medium-high value)
+      if (keywordsLower.includes(word)) {
+        relevance += 10
+      }
+      
+      // Content word matches (scaled by frequency but capped)
       const wordMatches = contentLower.split(word).length - 1
-      relevance += wordMatches * 2
+      relevance += Math.min(wordMatches * 3, 15) // Cap at 15 to prevent spam
     })
 
-    // Add section titles that match (high relevance)
-    if (section.toLowerCase().includes(queryLower)) {
-      relevance += 5
-    }
+    // Apply priority weighting (multiply by priority factor)
+    const priorityMultiplier = section.priority / 10
+    relevance = Math.round(relevance * priorityMultiplier)
 
-    // Only include results with some relevance
     if (relevance > 0) {
-      // Extract a relevant snippet
-      let snippet = content
-
-      // If content is long, try to extract a relevant portion
-      if (content.length > 300) {
+      // Extract relevant snippet - preserve exact text from knowledge base
+      let snippet = section.content
+      
+      if (section.content.length > 800) {
         const matchIndex = contentLower.indexOf(queryLower)
         if (matchIndex >= 0) {
-          // Extract text around the match
-          const start = Math.max(0, matchIndex - 150)
-          const end = Math.min(content.length, matchIndex + 150)
-          snippet = (start > 0 ? "..." : "") + content.substring(start, end) + (end < content.length ? "..." : "")
+          // Extract text around the match, preserving exact formatting
+          const start = Math.max(0, matchIndex - 300)
+          const end = Math.min(section.content.length, matchIndex + 500)
+          snippet = (start > 0 ? "..." : "") + 
+                   section.content.substring(start, end) + 
+                   (end < section.content.length ? "..." : "")
         } else {
-          // If no exact match, just take the beginning
-          snippet = content.substring(0, 300) + "..."
+          // No exact phrase match, take beginning preserving formatting
+          snippet = section.content.substring(0, 800) + "..."
         }
       }
 
       results.push({
-        section: formatSectionTitle(section),
+        section: section.title,
         content: snippet,
         relevance,
+        priority: section.priority,
+        route: section.route
       })
     }
   })
 
-  // Sort by relevance (highest first)
-  return results.sort((a, b) => b.relevance - a.relevance)
+  // Sort by relevance score (highest first), then by priority
+  return results.sort((a, b) => {
+    if (b.relevance !== a.relevance) {
+      return b.relevance - a.relevance
+    }
+    return b.priority - a.priority
+  })
 }
 
-// Helper function to format section titles
-function formatSectionTitle(section: string): string {
-  switch (section) {
-    case "executiveSummary":
-      return "Executive Summary"
-    case "canadianIdentity":
-      return "Canadian Identity"
-    case "consumerInsights":
-      return "Consumer Insights"
-    case "competitiveAnalysis":
-      return "Competitive Analysis"
-    case "marketDisruption":
-      return "Market Disruption"
-    case "recommendations":
-      return "Strategic Recommendations"
-    case "references":
-      return "References"
-    default:
-      return section.charAt(0).toUpperCase() + section.slice(1).replace(/([A-Z])/g, " $1")
-  }
+// Quick access functions for specific sections
+export function getSection(sectionId: string): KnowledgeSection | undefined {
+  return CROWN_ROYAL_KNOWLEDGE_BASE.find(section => section.id === sectionId)
+}
+
+export function getSectionsByPriority(minPriority: number = 8): KnowledgeSection[] {
+  return CROWN_ROYAL_KNOWLEDGE_BASE
+    .filter(section => section.priority >= minPriority)
+    .sort((a, b) => b.priority - a.priority)
 }
