@@ -316,7 +316,7 @@ export default function Chatbot() {
                   <Textarea
                     value={input}
                     onChange={handleInputChange}
-                    placeholder="Ask KongZilla about Crown Royal strategy..."
+                    placeholder="Ask KongZilla about Crown Royal..."
                     className="min-h-[40px] max-h-[120px] resize-none"
                     disabled={isChatLoading}
                     rows={1}
