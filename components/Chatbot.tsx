@@ -146,7 +146,7 @@ export default function Chatbot() {
           <div className="relative w-full h-full rounded-full overflow-hidden">
             <Image
               src="/images/kongzilla-chat-avatar.png"
-              alt="Crown Royal Assistant"
+              alt="KongZilla AI"
               fill
               className="object-cover"
               sizes="64px"
@@ -166,13 +166,13 @@ export default function Chatbot() {
               <div className="relative w-8 h-8 rounded-full overflow-hidden border border-white/20">
                 <Image
                   src="/images/kongzilla-chat-avatar.png"
-                  alt="Crown Royal Assistant"
+                  alt="KongZilla AI"
                   fill
                   className="object-cover"
                   sizes="32px"
                 />
               </div>
-              <CardTitle className="text-lg font-semibold">Crown Royal Assistant</CardTitle>
+              <CardTitle className="text-lg font-semibold">KongZilla AI</CardTitle>
             </div>
             <Button variant="ghost" size="icon" onClick={toggleChat} className="h-8 w-8 text-white hover:bg-purple-700">
               <X className="h-4 w-4" />
@@ -316,7 +316,7 @@ export default function Chatbot() {
                   <Textarea
                     value={input}
                     onChange={handleInputChange}
-                    placeholder="Ask about Crown Royal strategy..."
+                    placeholder="Ask KongZilla about Crown Royal strategy..."
                     className="min-h-[40px] max-h-[120px] resize-none"
                     disabled={isChatLoading}
                     rows={1}
