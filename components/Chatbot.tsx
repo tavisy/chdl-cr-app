@@ -220,7 +220,7 @@ export default function Chatbot() {
                       src="/images/kongzilla-chat-avatar.png"
                       alt="Crown Royal Assistant"
                       fill
-                      className="object-cover opacity-50"
+                      className="object-cover"
                       sizes="64px"
                     />
                   </div>
@@ -277,7 +277,7 @@ export default function Chatbot() {
                                   key={idx}
                                   onClick={() => {
                                     const route = getSourceRoute(source)
-                                    window.open(route, "_blank")
+                                    window.location.href = route
                                   }}
                                   className="text-xs text-white px-2 py-1 rounded-full flex items-center gap-1 transition-colors cursor-pointer"
                                   style={{
