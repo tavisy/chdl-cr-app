@@ -88,6 +88,120 @@ export default function HomePage() {
         <div className="absolute bottom-0 left-0 right-0 h-32 bg-gradient-to-t from-slate-50 to-transparent"></div>
       </div>
 
+      {/* Sean's Take Section */}
+      <section className="py-20 bg-gradient-to-br from-amber-50 via-orange-50 to-red-50 relative overflow-hidden">
+        <div className="absolute inset-0 bg-[url('/placeholder.svg?height=800&width=1200')] opacity-5"></div>
+        <div className="container mx-auto px-6 relative z-10">
+          <div className="max-w-5xl mx-auto">
+            <div className="text-center mb-12">
+              <div className="inline-flex items-center gap-3 bg-gradient-to-r from-amber-600 to-orange-600 text-white px-6 py-3 rounded-full mb-6 shadow-lg">
+                <div className="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center">
+                  <span className="text-lg font-bold">S</span>
+                </div>
+                <span className="font-semibold text-lg">Sean's Take</span>
+              </div>
+              <h2 className="text-3xl md:text-4xl font-bold text-slate-900 mb-4">
+                Designer vs. AI: Finding Common Ground
+              </h2>
+              <p className="text-lg text-slate-600 max-w-3xl mx-auto">
+                A candid reflection on how AI insights complement and challenge traditional design thinking
+              </p>
+            </div>
+
+            <Card className="p-8 md:p-12 bg-white/80 backdrop-blur-sm border-2 border-amber-200 shadow-xl">
+              <div className="prose prose-lg max-w-none text-slate-700 leading-relaxed">
+                <p className="text-xl font-medium text-slate-800 mb-6 italic">
+                  "Well the good news was, 'You can't spell Tavis without AI', Godzilla, didn't completely trump my
+                  30-plus years of design industry expertise..."
+                </p>
+
+                <div className="grid md:grid-cols-2 gap-8 mb-8">
+                  <div className="bg-gradient-to-br from-green-50 to-emerald-50 p-6 rounded-xl border border-green-200">
+                    <h3 className="text-lg font-semibold text-green-800 mb-3 flex items-center gap-2">
+                      <div className="w-5 h-5 bg-green-600 rounded-full flex items-center justify-center">
+                        <span className="text-white text-xs">✓</span>
+                      </div>
+                      Shared Insights
+                    </h3>
+                    <p className="text-green-700 text-sm">
+                      Both human expertise and AI identified Crown Royal's need to modernize for broader appeal. The
+                      convergence on this core insight validates the strategic direction while highlighting different
+                      approaches to execution.
+                    </p>
+                  </div>
+
+                  <div className="bg-gradient-to-br from-blue-50 to-indigo-50 p-6 rounded-xl border border-blue-200">
+                    <h3 className="text-lg font-semibold text-blue-800 mb-3 flex items-center gap-2">
+                      <div className="w-5 h-5 bg-blue-600 rounded-full flex items-center justify-center">
+                        <span className="text-white text-xs">!</span>
+                      </div>
+                      AI Revelations
+                    </h3>
+                    <p className="text-blue-700 text-sm">
+                      The demographic insights around Millennials, Gen Z, and women consumers weren't initially
+                      considered in the traditional design approach, revealing blind spots in targeting the core bourbon
+                      audience.
+                    </p>
+                  </div>
+                </div>
+
+                <p className="mb-6">
+                  My design focused on a quick way to market with bold messaging on a label that would stop people in
+                  its tracks. While I think this campaign would still be strong for a legacy brand to be able to move
+                  quickly without looking at its overall brand and diverging from the master brand, after AI Tavis
+                  surfaced the demographic market, I definitely would have reconsidered some of this in my design.
+                </p>
+
+                <div className="bg-gradient-to-r from-amber-50 to-orange-50 p-6 rounded-xl border-l-4 border-amber-500 mb-6">
+                  <h4 className="font-semibold text-amber-800 mb-2">Key Realization</h4>
+                  <p className="text-amber-700">
+                    The opportunity to expand and appeal to a Millennial and Gen Z audience and women wasn't something I
+                    considered as I designed to the core audience I know, as a bourbon drinker myself. Doing this in our
+                    typical way at Carter Hales, our design team would use this insight to explore what brands they
+                    currently drink, look at how we might adjust copywriting.
+                  </p>
+                </div>
+
+                <p className="mb-6">
+                  <strong>
+                    Was the strong irreverent Canadian language potentially too vulgar or not as appealing to that demo?
+                  </strong>{" "}
+                  This question now becomes central to the design strategy, showing how AI insights can redirect
+                  creative thinking toward more inclusive approaches.
+                </p>
+
+                <div className="bg-gradient-to-r from-purple-50 to-indigo-50 p-6 rounded-xl border border-purple-200 mb-6">
+                  <h4 className="font-semibold text-purple-800 mb-2">Beyond the Label</h4>
+                  <p className="text-purple-700">
+                    I also thought the insight Tavis helped surface around misperceptions of rye being a mixer vs a
+                    premium spirit could be really interesting to explore from more than just a label perspective and
+                    one of the suggestions surfaced by Tavis. We could explore the bottle design, the top and many other
+                    elements as well as the way the product is described and marketed within the brand.
+                  </p>
+                </div>
+
+                <div className="bg-gradient-to-r from-slate-800 to-slate-900 text-white p-6 rounded-xl">
+                  <h4 className="font-semibold text-amber-400 mb-3">The Challenge</h4>
+                  <p className="text-slate-200 mb-4">
+                    Make sure you explore the rest of the tool AI Tavis has provided and let me know if there's anything
+                    else you think that would have been helpful to influence the design thinking.
+                  </p>
+                  <p className="text-amber-300 font-medium">
+                    Stay tuned to find out about the next big battle between the Artist and AI.
+                  </p>
+                </div>
+              </div>
+            </Card>
+
+            <div className="mt-8 text-center">
+              <Badge className="bg-gradient-to-r from-amber-600 to-orange-600 text-white px-4 py-2 text-sm">
+                Human + AI Collaboration
+              </Badge>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* Navigation Pills */}
       <div className="sticky top-0 z-40 bg-white/95 backdrop-blur-sm border-b">
         <div className="container mx-auto px-6 py-4">
