@@ -15,6 +15,71 @@ KEY OPPORTUNITIES:
 - Build digital-first engagement strategies
 `,
 
+  // Sean's Designer Perspective - Human vs AI Insights
+  seansDesignerPerspective: `
+SEAN'S TAKE: DESIGNER VS. AI INSIGHTS
+
+Human-AI Collaboration Findings
+
+Initial Assessment:
+"Well the good news was, 'You can't spell Tavis without AI', Godzilla, didn't completely trump my 30-plus years of design industry expertise and in fact, there were a number of insights that we both shared."
+
+Shared Strategic Insights:
+✓ Both human expertise and AI identified Crown Royal's need to modernize for broader appeal
+✓ The convergence on this core insight validates the strategic direction
+✓ Different approaches to execution emerged from the same foundational understanding
+✓ Legacy brand transformation requires careful balance between innovation and heritage
+
+AI-Revealed Blind Spots:
+! The demographic insights around Millennials, Gen Z, and women consumers weren't initially considered in the traditional design approach
+! Revealed targeting limitations when focusing solely on core bourbon audience
+! Surfaced opportunities for more inclusive brand positioning
+! Highlighted potential misalignment between designer assumptions and market reality
+
+Traditional Design Approach:
+"My design focused on a quick way to market with bold messaging on a label that would stop people in its tracks. While I think this campaign would still be strong for a legacy brand to be able to move quickly without looking at its overall brand and diverging from the master brand, after AI Tavis surfaced the demographic market, I definitely would have reconsidered some of this in my design."
+
+Key Design Realizations:
+- Quick-to-market bold messaging strategy remains viable for legacy brands
+- Master brand consistency important for established brands
+- AI demographic insights would have influenced initial design direction
+- Personal experience as bourbon drinker created targeting tunnel vision
+
+Demographic Expansion Opportunity:
+"The opportunity to expand and appeal to a Millennial and Gen Z audience and women wasn't something I considered as I designed to the core audience I know, as a bourbon drinker myself."
+
+Carter Hales Design Process Integration:
+- Use AI insights to explore current brand preferences of target demographics
+- Adjust copywriting based on demographic research
+- Question: "Was the strong irreverent Canadian language potentially too vulgar or not as appealing to that demo?"
+- This question becomes central to inclusive design strategy
+
+Beyond Label Design - Holistic Brand Approach:
+"I also thought the insight Tavis helped surface around misperceptions of rye being a mixer vs a premium spirit could be really interesting to explore from more than just a label perspective."
+
+Expanded Design Opportunities:
+- Bottle design modifications to communicate premium positioning
+- Cap/closure design to reinforce quality perception
+- Product description and marketing language refinement
+- Comprehensive brand experience design
+- Multi-touchpoint premium perception building
+
+Designer-AI Synthesis:
+- AI provides demographic and market insights that complement design intuition
+- Human expertise brings practical implementation and brand heritage understanding
+- Combination creates more comprehensive and inclusive design strategy
+- AI challenges assumptions while human experience provides execution feasibility
+
+Future Exploration Areas:
+- Investigate additional AI insights that could influence design thinking
+- Explore tools and methodologies for designer-AI collaboration
+- Develop frameworks for integrating data-driven insights with creative intuition
+- Continue the "Artist vs AI" exploration for ongoing learning
+
+The Ongoing Challenge:
+"Make sure you explore the rest of the tool AI Tavis has provided and let me know if there's anything else you think that would have been helpful to influence the design thinking. Stay tuned to find out about the next big battle between the Artist and AI."
+`,
+
   // Canadian Identity Page
   canadianIdentity: `
 CANADIAN IDENTITY INSIGHTS
@@ -406,6 +471,8 @@ function formatSectionTitle(section: string): string {
   switch (section) {
     case "executiveSummary":
       return "Executive Summary"
+    case "seansDesignerPerspective":
+      return "Sean's Designer Perspective"
     case "canadianIdentity":
       return "Canadian Identity"
     case "consumerInsights":
